@@ -270,7 +270,7 @@ async def test_line_permission(test_user, test_line, test_tenant):
             tenant_id=test_tenant.id,
             resource_type="line",
             resource_id=test_line.id,
-            action="send"
+            action="member"
         )
         db.add(perm)
         await db.commit()

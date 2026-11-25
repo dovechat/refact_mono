@@ -1,4 +1,5 @@
 # app/services/member_service.py
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from typing import List, Optional
@@ -67,7 +68,7 @@ class MemberService:
             is_active=True
         )
 
-        return MemberResponse.from_orm(member)
+        return MemberResponse.model_validate(member)
 
     async def _send_invitation_email(self, email: str, password: str):
         """Отправить приглашение с паролем"""
@@ -78,7 +79,7 @@ class MemberService:
         rows = await self.member_repo.get_by_tenant(tenant_id, skip, limit)
         result = []
         for membership, email in rows:
-            r = MemberResponse.from_orm(membership)
+            r = MemberResponse.model_validate(membership)
             r.email = email
             result.append(r)
         return result
@@ -87,7 +88,7 @@ class MemberService:
         """Удалить сотрудника из тенанта"""
         member = await self.member_repo.get_by_user_and_tenant(user_id, tenant_id)
         if not member:
-            raise ValueError("Member not found")
+            raise HTTPException(status_code=404, detail="Member not found")
         if member.role == "owner":
             raise ValueError("Owner can't be removed")
 
@@ -111,7 +112,7 @@ class MemberService:
             tenant_id=tenant_id,
             resource_type="line",
             resource_id=data.line_id,
-            action="member"
+            action=data.action
         )
 
         return LinePermissionResponse(
@@ -141,9 +142,10 @@ class MemberService:
         permission = await self.permission_repo.get_by_user_and_resource(
             user_id=user_id,
             resource_type="line",
-            resource_id=line_id
+            resource_id=line_id,
+            tenant_id=tenant_id
         )
-        if not permission or permission.tenant_id != tenant_id:
-            raise ValueError("Permission not found")
+        if not permission:
+            raise HTTPException(status_code=404, detail="Permission not found")
 
         await self.permission_repo.delete(permission)

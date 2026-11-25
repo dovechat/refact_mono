@@ -18,7 +18,7 @@ class MemberResponse(BaseModel):
 class LinePermissionCreate(BaseModel):
     user_id: UUID
     line_id: UUID
-    action: str = "send"  # можно сразу задать
+    action: Literal["owner", "member"] = "member"
 
 class LinePermissionResponse(BaseModel):
     user_id: UUID

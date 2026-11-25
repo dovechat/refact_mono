@@ -12,13 +12,16 @@ class PermissionRepository(BaseRepository[ResourcePermission]):
         self, 
         user_id: UUID, 
         resource_type: str, 
-        resource_id: UUID
+        resource_id: UUID,
+        tenant_id: Optional[UUID] = None
     ) -> Optional[ResourcePermission]:
         query = select(ResourcePermission).where(
             ResourcePermission.user_id == user_id,
             ResourcePermission.resource_type == resource_type,
             ResourcePermission.resource_id == resource_id
         )
+        if tenant_id is not None:
+            query = query.where(ResourcePermission.tenant_id == tenant_id)
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 

@@ -16,6 +16,7 @@ from app.api.v1.members import members_router
 from app.api.v1.notifications import router as notification_router
 from app.api.v1.webhooks import router as webhooks_router
 from app.api.v1.vk_oauth_router import vk_oauth_router
+from app.core.dependencies import require_system_admin
 
 import logging
 logging.getLogger('uvicorn.error').setLevel(logging.DEBUG)
@@ -55,7 +56,7 @@ app.add_middleware(
 ],
 '''
 
-@app.get("/routes")
+@app.get("/routes", dependencies=[Depends(require_system_admin)])
 def list_routes():
     return [route.path for route in app.routes]
 

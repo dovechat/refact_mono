@@ -19,7 +19,7 @@ async def test_get_balance(client, test_tenant, token_with_tenant):
 
 
 @pytest.mark.asyncio
-async def test_adjust_balance(client, test_tenant, token_with_tenant):
+async def test_adjust_balance(client, test_tenant, token_with_tenant, token_headers):
     """Test manual balance adjustment"""
     from tests.conftest import get_test_db
     from models.billing import BalanceLedger
@@ -35,7 +35,16 @@ async def test_adjust_balance(client, test_tenant, token_with_tenant):
         headers=token_with_tenant
     )
     assert response.status_code == 403
-    '''
+
+    response = await client.post(
+        f"/api/v1/tenants/{test_tenant.id}/billing/balance/adjust",
+        json={
+            "amount": 100.50,
+            "balance_type": "main",
+            "description": "Manual top-up for testing"
+        },
+        headers=token_headers
+    )
     assert response.status_code == 200
     data = response.json()
 
@@ -57,10 +66,9 @@ async def test_adjust_balance(client, test_tenant, token_with_tenant):
             balance.main_balance = Decimal("0.00")
             balance.bonus_balance = Decimal("0.00")
             await session.commit()
-    '''
 
 @pytest.mark.asyncio
-async def test_get_ledger_history(client, test_tenant, token_with_tenant):
+async def test_get_ledger_history(client, test_tenant, token_with_tenant, token_headers):
     """Test getting ledger history"""
     from tests.conftest import get_test_db
     from models.billing import BalanceLedger
@@ -73,7 +81,7 @@ async def test_get_ledger_history(client, test_tenant, token_with_tenant):
             "balance_type": "main",
             "description": "Test entry"
         },
-        headers=token_with_tenant
+        headers=token_headers
     )
 
     response = await client.get(
@@ -118,7 +126,7 @@ async def test_get_payments(client, test_tenant, token_with_tenant):
 
 
 @pytest.mark.asyncio
-async def test_update_payment_status(client, test_tenant, token_with_tenant):
+async def test_update_payment_status(client, test_tenant, token_with_tenant, token_headers):
     """Test updating payment status"""
     from tests.conftest import get_test_db
     from models.billing import Payment
@@ -140,19 +148,33 @@ async def test_update_payment_status(client, test_tenant, token_with_tenant):
     response = await client.patch(
         f"/api/v1/tenants/{test_tenant.id}/billing/payments/{payment_id}",
         json={"status": "paid"},
-        headers=token_with_tenant
+        headers=token_headers
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "paid"
 
+    balance_resp = await client.get(
+        f"/api/v1/tenants/{test_tenant.id}/billing/balance",
+        headers=token_with_tenant
+    )
+    assert Decimal(balance_resp.json()["main_balance"]) == Decimal("100.00")
+
     # Cleanup
+    from models.billing import Balance, BalanceLedger
+    from sqlalchemy import delete
     async with get_test_db() as session:
+        await session.execute(
+            delete(BalanceLedger).where(BalanceLedger.tenant_id == test_tenant.id)
+        )
+        balance = await session.get(Balance, test_tenant.id)
+        if balance:
+            balance.main_balance = Decimal("0.00")
         obj = await session.get(Payment, payment_id)
         if obj:
             await session.delete(obj)
-            await session.commit()
+        await session.commit()
 
 
 @pytest.mark.asyncio
@@ -168,7 +190,7 @@ async def test_get_tariffs(client, token_with_tenant):
 
 
 @pytest.mark.asyncio
-async def test_create_tariff(client, token_with_tenant):
+async def test_create_tariff(client, token_headers):
     """Test creating new tariff"""
     from tests.conftest import get_test_db
     from models.billing import Tariff
@@ -182,7 +204,7 @@ async def test_create_tariff(client, token_with_tenant):
             "price": 10.00,
             "is_active": True
         },
-        headers=token_with_tenant
+        headers=token_headers
     )
 
     assert response.status_code == 201
@@ -203,7 +225,7 @@ async def test_create_tariff(client, token_with_tenant):
 
 
 @pytest.mark.asyncio
-async def test_update_tariff(client, token_with_tenant):
+async def test_update_tariff(client, token_headers):
     """Test updating tariff"""
     from tests.conftest import get_test_db
     from models.billing import Tariff
@@ -226,7 +248,7 @@ async def test_update_tariff(client, token_with_tenant):
     response = await client.patch(
         f"/api/v1/tariffs/{tariff_id}",
         json={"price": 120.00, "is_active": False},
-        headers=token_with_tenant
+        headers=token_headers
     )
 
     assert response.status_code == 200

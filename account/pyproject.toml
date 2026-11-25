@@ -15,24 +15,21 @@ asyncpg = "^0.29.0"
 pydantic = {version = "^2.5.3", extras = ["email"]} 
 pydantic-settings = "^2.1.0"
 pyjwt = "^2.10.1"
-python-jose = {extras = ["cryptography"], version = "^3.3.0"}
-passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+bcrypt = "^5.0.0"
+cryptography = "^46.0.3"
+httpx = "^0.26.0"
 python-multipart = "^0.0.6"
-Faker = "^30.0.0"
 psycopg2-binary = "^2.9.11"
-tqdm = "^4.67.1"
 jinja2 = "^3.1.6"
 minio = "^7.2.20"
 redis = "^7.4.0"
-respx = "^0.23.1"
-pysocks = "^1.7.1"
 
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.4"
 pytest-asyncio = "^0.23.3"
 pytest-cov = "^4.1.0"
-httpx = "^0.26.0"
+respx = "^0.23.1"
 mypy = "^1.8.0"
 ruff = "^0.1.14"
 
@@ -45,7 +42,7 @@ build-backend = "poetry.core.masonry.api"
 # ============================================================================
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py312"
 
 # Директории для проверки
 include = ["app/**/*.py", "tests/**/*.py"]
@@ -96,7 +93,7 @@ line-ending = "auto"
 # MYPY Configuration (проверка типов)
 # ============================================================================
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false  # false для постепенного внедрения
@@ -112,9 +109,7 @@ strict_equality = true
 # Игнорируем библиотеки без типов
 [[tool.mypy.overrides]]
 module = [
-    "passlib.*",
-    "jose.*",
-    "faker.*",
+    "minio.*",
 ]
 ignore_missing_imports = true
 

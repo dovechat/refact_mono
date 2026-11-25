@@ -91,7 +91,7 @@ async def test_add_line_permission_integration(
         json={
             "user_id": str(test_user.id),
             "line_id": str(test_line.id),
-            "action": "send"
+            "action": "member"
         },
         headers=token_with_tenant
     )
@@ -135,7 +135,7 @@ async def test_remove_line_permission_integration(
         json={
             "user_id": str(test_user.id),
             "line_id": str(test_line.id),
-            "action": "send"
+            "action": "member"
         },
         headers=token_with_tenant
     )
