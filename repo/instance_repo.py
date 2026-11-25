@@ -56,7 +56,7 @@ class InstanceRepository(BaseRepository[Instance]):
             Instance.provider == provider,
             Instance.status == InstanceStatus.idle,
             Instance.allocated_to_line_id.is_(None)
-        ).limit(1)
+        ).limit(1).with_for_update(skip_locked=True)
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
@@ -69,14 +69,16 @@ class InstanceRepository(BaseRepository[Instance]):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_free_green_instance(self) -> Instance:
+    async def get_free_green_instance(self) -> Instance | None:
         log.info("repo.instance_repo get_free_green_instance")
-        row = await self.get_multi(
-            limit=1,
-            filters={"status": "idle"}
-        )
+        query = select(Instance).where(
+            Instance.status == InstanceStatus.idle,
+            Instance.allocated_to_line_id.is_(None)
+        ).limit(1).with_for_update(skip_locked=True)
+        result = await self.session.execute(query)
+        row = result.scalar_one_or_none()
         log.info(f"repo.instance_repo get_free_green_instance row {row}")
-        return row[0] if row else None
+        return row
 
     async def allocate_instance(self, instance: Instance, line_id: uuid.UUID) -> None:
         instance.allocated_to_line_id = line_id

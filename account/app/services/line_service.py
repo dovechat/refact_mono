@@ -1,6 +1,8 @@
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
+from infra.crypto import encrypt
 from app.repositories.line_repo import LineRepository
 from repo.instance_repo import InstanceRepository
 from models.billing import LedgerOperationType 
@@ -69,8 +71,7 @@ class LineService:
         instance = await self.instance_repo.get_free_instance()
 
         if not instance:
-            return "No free instances, it needs to buy new one"
-            # raise HTTPException(status_code=400, detail="No free instances, it needs to buy new one")
+            raise HTTPException(status_code=409, detail="No free instances, it needs to buy new one")
             '''
             external_id = f"wa_instance_{uuid.uuid4().hex[:8]}"
             instance = await self.instance_repo.create_instance(
@@ -84,18 +85,19 @@ class LineService:
 
         await self.instance_repo.allocate_instance(instance, line_id)
 
+        creds = {"encrypted_data": encrypt(json.dumps({"instance_id": instance.external_id}))}
         account = await self.channel_account_repo.get_by_line_and_type(line_id, ChannelType.WHATSAPP_GREEN)
         if account:
             await self.channel_account_repo.update_account(
                 account,
-                credentials_encrypted={"instance_id": instance.external_id},
+                credentials_encrypted=creds,
                 state_json={"qr_status": "pending"}
             )
         else:
             await self.channel_account_repo.create_account(
                 line_id=line_id,
                 channel_type=ChannelType.WHATSAPP_GREEN,
-                credentials_encrypted={"instance_id": instance.external_id},
+                credentials_encrypted=creds,
                 state_json={"qr_status": "pending"}
             )
 
@@ -118,7 +120,10 @@ class LineService:
 
         user_db = await self.user_repo.get_by_id(user.id)
         user_created_at = user_db.created_at.replace(tzinfo=timezone.utc)
-        is_demo = datetime.now(timezone.utc) < user_created_at + timedelta(days=2)
+        is_demo = (
+            datetime.now(timezone.utc) < user_created_at + timedelta(days=2)
+            and await self.channel_account_repo.count_by_tenant(tenant_id) == 0
+        )
         expires_at = self._calculate_expiry(
             data.subscription_period, is_demo, user_db.created_at
         )
@@ -156,21 +161,19 @@ class LineService:
         if not account:
             raise HTTPException(status_code=404, detail="Channel not found")
 
-        '''
         if data.amount > 0:
-            balance = await self.billing_repo.get_by_tenant(tenant_id)
-            if balance.main_balance < data.amount:
+            balance = await self.billing_repo.get_by_tenant(tenant_id, for_update=True)
+            if not balance or balance.main_balance < data.amount:
                 raise HTTPException(status_code=402, detail="Insufficient balance")
-            log.info(f"\n\n self.billing_repo {type(self.billing_repo)} {dir(self.billing_repo)} \n\n")
-            await self.billing_repo.deduct(tenant_id, data.amount)
-            await self.ledger_repo.add_entry(
+            await self.billing_repo.adjust_balance(balance, -data.amount, "main")
+            await self.ledger_repo.create_entry(
                 tenant_id=tenant_id,
                 amount=-data.amount,
+                balance_type="main",
                 operation_type=LedgerOperationType.charge,
-                reference_id=line_id,
                 description=f"Продление канала {data.channel_type} на {data.subscription_period}",
+                reference_id=line_id,
             )
-        '''
 
         now = datetime.now(timezone.utc)
         base = account.expires_at if account.expires_at and account.expires_at > now else now

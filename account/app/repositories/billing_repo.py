@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.billing import Balance, BalanceLedger, Payment, Tariff
 from repo.base import BaseRepository
@@ -15,9 +15,11 @@ class BalanceRepository(BaseRepository[Balance]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(Balance, session)
 
-    async def get_by_tenant(self, tenant_id: uuid.UUID) -> Balance | None:
+    async def get_by_tenant(self, tenant_id: uuid.UUID, for_update: bool = False) -> Balance | None:
         """Get balance for tenant"""
         query = select(Balance).where(Balance.tenant_id == tenant_id)
+        if for_update:
+            query = query.with_for_update()
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
@@ -35,13 +37,16 @@ class BalanceRepository(BaseRepository[Balance]):
             amount: Decimal,
             balance_type: str = "main"
     ) -> Balance:
-        """Adjust balance (add or subtract)"""
-        if balance_type == "main":
-            new_balance = balance.main_balance + amount
-            return await self.update(balance, main_balance=new_balance)
-        else:
-            new_balance = balance.bonus_balance + amount
-            return await self.update(balance, bonus_balance=new_balance)
+        """Adjust balance (add or subtract) atomically on DB side"""
+        column = "main_balance" if balance_type == "main" else "bonus_balance"
+        await self.session.execute(
+            update(Balance)
+            .where(Balance.tenant_id == balance.tenant_id)
+            .values({column: getattr(Balance, column) + amount})
+        )
+        await self.session.flush()
+        await self.session.refresh(balance)
+        return balance
 
 
 class BalanceLedgerRepository(BaseRepository[BalanceLedger]):

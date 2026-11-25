@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime
-from sqlalchemy import select, distinct
+from sqlalchemy import select, distinct, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.lines import ChannelAccount, Line, LineStatus
 from models.tenants import Tenant
@@ -71,6 +71,15 @@ class ChannelAccountRepository(BaseRepository[ChannelAccount]):
 
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(ChannelAccount, session)
+
+    async def count_by_tenant(self, tenant_id: uuid.UUID) -> int:
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(ChannelAccount)
+            .join(Line, Line.id == ChannelAccount.line_id)
+            .where(Line.tenant_id == tenant_id)
+        )
+        return result.scalar_one()
 
     async def create_account(
             self,

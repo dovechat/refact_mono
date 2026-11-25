@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime, timezone
@@ -28,21 +29,16 @@ class NotificationService:
             target: str,
             enabled: bool = True,
     ) -> list[NotificationSettings]:
-        memberships = await self.membership_repo.get_multi(filters={"user_id": user_id, "is_active": True})
-        tenant_ids = [m.tenant_id for m in memberships]
-        results = []
-        for tid in tenant_ids:
-            existing = await self.repo.get_settings_by_type_and_channel(tid, notification_type, channel)
-            if existing:
-                raise ValueError("Notification settings already exist")
-            data = {
-                "notification_type": notification_type,
-                "channel": channel,
-                "target": target,
-                "enabled": enabled,
-            }
-            results.append(await self.repo.create_settings(tid, data))
-        return results
+        existing = await self.repo.get_settings_by_type_and_channel(tenant_id, notification_type, channel)
+        if existing:
+            raise ValueError("Notification settings already exist")
+        data = {
+            "notification_type": notification_type,
+            "channel": channel,
+            "target": target,
+            "enabled": enabled,
+        }
+        return [await self.repo.create_settings(tenant_id, data)]
 
     async def get_all_settings(self, tenant_id: UUID) -> List[NotificationSettings]:
         """Получить все настройки уведомлений тенанта"""
@@ -81,12 +77,7 @@ class NotificationService:
         if not settings:
             raise ValueError("Notification settings not found")
 
-        memberships = await self.membership_repo.get_multi(filters={"user_id": user_id, "is_active": True})
-        for m in memberships:
-            s = await self.repo.get_settings_by_type_and_channel(m.tenant_id, settings.notification_type,
-                                                                 settings.channel)
-            if s:
-                await self.repo.delete_settings(s)
+        await self.repo.delete_settings(settings)
 
     # ============ NotificationLog ============
 
@@ -118,7 +109,7 @@ class NotificationService:
 
         if not settings_list:
             # Если нет настроек - просто логируем, но не падаем
-            print(f"No enabled notification settings for {notification_type.value} in tenant {tenant_id}")
+            logging.getLogger("uvicorn.error").info(f"No enabled notification settings for {notification_type.value} in tenant {tenant_id}")
             return []
 
         logs = []
@@ -129,8 +120,8 @@ class NotificationService:
                 "channel": settings.channel,
                 "target": settings.target,
                 "message": message,
-                "status": NotificationStatus.sent,  # Пока сразу "sent"
-                "sent_at": datetime.now(timezone.utc),
+                "status": NotificationStatus.pending,  # "sent" только после реальной отправки
+                "sent_at": None,
             }
 
             try:

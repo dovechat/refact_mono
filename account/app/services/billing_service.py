@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from fastapi import HTTPException
 from app.repositories.billing_repo import (
@@ -20,7 +20,7 @@ from app.schemas.billing_schemas import (
     TariffUpdate,
     TariffResponse
 )
-from models.billing import Payment
+from models.billing import LedgerOperationType, Payment
 import logging
 
 log = logging.getLogger("uvicorn.error")
@@ -106,8 +106,9 @@ class BillingService:
             skip: int = 0,
             limit: int = 100
     ) -> list[BillingHistoryItem]:
-        payments = await self.payment_repo.get_payments_by_tenant(tenant_id, 0, 1000)
-        adjustments = await self.ledger_repo.get_adjustments_by_tenant(tenant_id, 0, 1000)
+        window = skip + limit
+        payments = await self.payment_repo.get_payments_by_tenant(tenant_id, 0, window)
+        adjustments = await self.ledger_repo.get_adjustments_by_tenant(tenant_id, 0, window)
 
         items = []
         for p in payments:
@@ -129,7 +130,11 @@ class BillingService:
                 record_type="adjustment"
             ))
 
-        items.sort(key=lambda x: x.created_at or datetime.min, reverse=True)
+        def _sort_key(item: BillingHistoryItem) -> datetime:
+            dt = item.created_at or datetime.min
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+        items.sort(key=_sort_key, reverse=True)
         return items[skip: skip + limit]
 
     async def update_payment_status(
@@ -144,7 +149,22 @@ class BillingService:
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
 
+        was_paid = payment.status == "paid"
         updated_payment = await self.payment_repo.update_status(payment, data.status)
+
+        if data.status == "paid" and not was_paid:
+            balance = await self.balance_repo.get_by_tenant(tenant_id, for_update=True)
+            if not balance:
+                balance = await self.balance_repo.create_balance(tenant_id)
+            await self.balance_repo.adjust_balance(balance, payment.amount, "main")
+            await self.ledger_repo.create_entry(
+                tenant_id=tenant_id,
+                amount=payment.amount,
+                balance_type="main",
+                operation_type=LedgerOperationType.deposit,
+                description=f"Пополнение по платежу {payment.id}",
+                reference_id=payment.id,
+            )
 
         return PaymentResponse.model_validate(updated_payment)
 
@@ -157,7 +177,6 @@ class BillingService:
 
     async def create_tariff(self, data: TariffCreate) -> TariffResponse:
         """Create new tariff"""
-        print(f"****************** data {data}")
         tariff = await self.tariff_repo.create_tariff(
             name=data.name,
             channel_type=data.channel_type,

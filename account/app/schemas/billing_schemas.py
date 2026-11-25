@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -20,7 +20,7 @@ class BalanceResponse(BaseModel):
 class BalanceAdjust(BaseModel):
     """Manual balance adjustment by admin"""
     amount: Decimal = Field(..., description="Positive for credit, negative for debit")
-    balance_type: str = Field("main", description="main or bonus")
+    balance_type: Literal["main", "bonus"] = Field("main", description="main or bonus")
     description: str = Field(..., min_length=1, max_length=500)
 
 
@@ -75,7 +75,7 @@ class BillingHistoryItem(BaseModel):
 
 class PaymentStatusUpdate(BaseModel):
     """Update payment status manually"""
-    status: str = Field(..., description="paid, failed, pending, refunded")
+    status: Literal["paid", "failed", "pending", "refunded"] = Field(..., description="paid, failed, pending, refunded")
 
 
 # === TARIFF SCHEMAS ===
