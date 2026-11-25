@@ -43,7 +43,7 @@ async def create_line(
     try:
         return await line_service.create_line(tenant_id, data)
     except ValidationError as e:
-        log.debug(f"\n\n @line_router.post Validation error: {e.errors()} \n\n")
+        log.debug("create_line validation error: %s", [(err["loc"], err["type"]) for err in e.errors()])
         raise
 
 @line_router.get("/", response_model=list[LineListResponse])

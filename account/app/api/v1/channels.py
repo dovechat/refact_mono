@@ -195,7 +195,6 @@ async def configure_waba(
     current_user: UserContext = Depends(get_current_user),
     service: ChannelAccountService = Depends(get_channel_service)
 ):
-    log.info(f"channel_router configure_waba data {data}")
     res = await service.update_waba(line_id, tenant_id, data.api_key)
     log.info(f"channel_router configure_waba res {res}")
     return {"status": "ok", "line_id": res.line_id}

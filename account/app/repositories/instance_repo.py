@@ -13,8 +13,6 @@ class InstanceRepository(BaseRepository[Instance]):
             self,
             instance: Instance
     ) -> Instance:
-        log.info(f"\n\n*-*-*-*-*- instance repo release_instance instance {instance}\n\n")
-        print(f"\n\n*-*-*-*-*- instance repo release_instance instance {instance}\n\n")
         return await self.update(
             instance,
             status=InstanceStatus.idle,
@@ -55,7 +53,6 @@ class InstanceRepository(BaseRepository[Instance]):
             select(Instance).where(Instance.allocated_to_line_id == line_id)
         )
         instance = instance.scalar_one_or_none()
-        log.info(f"+++++++++++ instance_repo.update_by_line instance {instance} ++++++++++++")
         if not instance:
             return None
     

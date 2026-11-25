@@ -64,10 +64,8 @@ class ChannelAccountService:
         """
         # TODO: Use cryptography library
         if encrypted and "encrypted_data" in encrypted:
-            # log.info(f"************* _decrypt_credentials encrypted {encrypted} {type(encrypted['encrypted_data'])}")
             creds_js = decrypt(encrypted["encrypted_data"])
             creds = json.loads(creds_js)
-            log.info(f"************* _decrypt_credentials encrypted creds {creds} ")
             return creds
         return {}
 
@@ -98,7 +96,7 @@ class ChannelAccountService:
         credentials = self._decrypt_credentials(account.credentials_encrypted)
         phone = credentials.get("phone") if credentials else None
         
-        log.info(f"\n\n -- ChannelService.get_account account {account.__dict__} -- \n\n")
+        log.info("get_account line_id=%s channel_type=%s", line_id, channel_type)
         
         return ChannelAccountResponse(
             id=account.id,
@@ -122,7 +120,7 @@ class ChannelAccountService:
             phkey = PHKEYS[account.channel_type.value]
             # phone = credentials.get("phone") if credentials and "phone" in credentials.keys()  else account.phone
             phone = credentials.get(phkey) if  credentials and  phkey in credentials.keys()  else account.phone
-            log.info(f"\n\n --++--  channes_service get_accounts  account {account} ch_type {account.channel_type}  phone {phone}  credentials {credentials} phone {phone}\n\n")
+            log.debug("get_accounts account_id=%s channel_type=%s", account.id, account.channel_type)
             amo_link = await self.crm_line_repo.get_by_line_and_channel(
                 account.line_id, account.channel_type.value
             )
@@ -189,7 +187,6 @@ class ChannelAccountService:
         token = secrets.token_urlsafe(32)
         credentials.secret_token = token
 
-        log.debug(f"\n\n ******* credentials {credentials} \n\n")
         phone = credentials.bot_token.split(":")[0]
 
         encrypted = self._encrypt_credentials(credentials.model_dump())
@@ -220,7 +217,6 @@ class ChannelAccountService:
             credentials: TelegramUserCredentials
     ) -> ChannelAccountResponse:
         await self._verify_line_exists(line_id, tenant_id)
-        log.info(f"\n\n --------- credentials {credentials.__dict__}\n\n")
         if not credentials.phone.startswith("+"):
             credentials.phone = "+" + credentials.phone
         phone = credentials.phone
@@ -367,7 +363,7 @@ class ChannelAccountService:
                     break
                 log.info(f"Green phone not ready yet, attempt {attempt + 1}")
                 await asyncio.sleep(3)
-        log.info(f"Green phone resolved: {phone}")
+        log.info("Green phone resolved: %s", bool(phone))
 
         # Сохраняем credentials
         credentials = {"id_instance": id_instance, "api_token": token, "phone": phone}
@@ -413,7 +409,7 @@ class ChannelAccountService:
         log.info(f"******** channel_service connect_whatsapp_green account {account}")
         instance = await self.instance_repo.get_free_green_instance()
         if instance:
-            log.info(f"******** channel_service connect_whatsapp_green instance {instance} {instance.__dict__} ")
+            log.info("connect_whatsapp_green instance_id=%s", instance.id)
         if not instance:
             log.error(f"!!! --- ERROR --- channel_service connect_whatsapp_green line {line} No free WhatsApp Green instance available")
             raise HTTPException(404, "Нет доступных свободных инстансов")
@@ -436,7 +432,7 @@ class ChannelAccountService:
         # 4. Получаем QR от Green API
         qr = await self.get_qr_from_green(instance.external_id, token)
 
-        log.info(f"******** channel_service connect_whatsapp_green qr {qr}")
+        log.info("connect_whatsapp_green qr received")
 
         # 5. Сохраняем временные данные (например, в state_json линии)
         await self.line_repo.update(line, state_json={"pending_instance_id": str(instance.id), "qr": qr})
@@ -493,11 +489,11 @@ class ChannelAccountService:
             else:
                 log.info(f"Webhook set our_wh_url {our_wh_url}")
         except httpx.ReadTimeout:
-            msg = f"!!! --- ERROR: Send green set_webhook  {green_wh_url} request returns timeout "
+            msg = "!!! --- ERROR: Send green set_webhook request returns timeout"
             log.error(msg)
             raise HTTPException(status_code=504, detail=msg)
         except Exception as e:
-            msg = f"!!! --- ERROR: Send green set_webhook failed : {e} "
+            msg = f"!!! --- ERROR: Send green set_webhook failed : {type(e).__name__}"
             log.error(msg)
             raise HTTPException(status_code=400, detail=msg)
 
@@ -511,11 +507,11 @@ class ChannelAccountService:
                 raise HTTPException(408, detail="Таймаут подключения к WhatsApp")
             res.raise_for_status()
             data = res.json()
-            log.info(f"get_qr_from_green response {data}")
+            log.info("get_qr_from_green response type=%s", data.get("type"))
             if data.get("type") == "qrCode":
                 return data["message"]  # base64
             msg = data.get("message", "Failed to get QR")
-            log.error(f"get_qr_from_green error {data}")
+            log.error("get_qr_from_green error type=%s message=%s", data.get("type"), msg)
             raise HTTPException(400, detail=msg)
 
     async def update_waba(
@@ -548,11 +544,10 @@ class ChannelAccountService:
         )
 
     async def _set_waba_webhook(self, line_id, api_key, token: str):
-        log.info(f"\n\n line_id {line_id} api_key {api_key} \n\n")
+        log.info("_set_waba_webhook line_id=%s", line_id)
         data = {
                         "url": f"{settings.host_url}/api/v1/webhooks/whatsapp/waba/{line_id}/{token}"
                     }
-        log.info(f"\n\n data {data} \n\n")
         waba_wh_url = f"https://waba-sandbox.360dialog.io/v1/configs/webhook"
         try:
             async with httpx.AsyncClient() as client:
@@ -604,7 +599,7 @@ class ChannelAccountService:
         )
         log.info(f"_vk_add_callback_server resp {resp}")
         result = resp.json()
-        log.info(f"_vk_add_callback_server result {result}")
+        log.info("_vk_add_callback_server result: %s", "error" if result.get("error") else "ok")
         if result.get("error"):
             raise ValueError(f"VK callback error: {result['error']['error_msg']}")
         return result["response"]["server_id"]

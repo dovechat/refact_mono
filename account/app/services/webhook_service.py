@@ -39,11 +39,9 @@ class WebhookService:
     async def _handle_qr_scanned(self, line_id: uuid.UUID, payload: dict):
         """QR отсканирован - линия подключена"""
         # Обновляем статус в channel_accounts
-        log.info(f"------- payload {payload}")
         instance_data = payload.get("instanceData", {})
         wid = instance_data.get("wid") or ""
         phone = wid.split("@")[0] if "@" in wid else wid
-        log.info(f"------- phone {phone}")
         connection_error = "can't get number of scanning phone" if wid else None
 
         await self.channel_repo.update_connection_status(
@@ -58,7 +56,7 @@ class WebhookService:
             line_id=line_id,
             state={"status": "connected"}
         )
-        log.info(f"Line {line_id} connected via QR scan, phone: {phone}")
+        log.info(f"Line {line_id} connected via QR scan")
 
     async def process_vk_webhook(self, line_id: uuid.UUID, payload: dict):
         """Обработка вебхука от VK API"""
@@ -76,16 +74,14 @@ class WebhookService:
     async def _handle_vk(self, line_id: uuid.UUID, payload: dict):
         """VK линия подключена"""
         # Обновляем статус в channel_accounts
-        log.info(f"------- payload {payload}")
         group_id = payload.get("group_id", None)
 
         channel_acc = await self.channel_repo.get_by_line_and_type(line_id, 'vk')
-        log.info(f"\n\n *-**-*-*-*-*-*-*-*   WebhookService._handle_vk channel_acc {dir(channel_acc)}   \n\n ")
         creds_js = decrypt(channel_acc.credentials_encrypted.get("encrypted_data",""))
         creds = json.loads(creds_js)
         group_id_db = creds.get("group_id", "")
         confirmation_code = creds.get("confirmation_code", "")
-        log.info(f"------- group_id {group_id} group_id_db {group_id_db} confirmation_code {confirmation_code}")
+        log.info(f"------- group_id {group_id} group_id_db {group_id_db}")
         connection_error = "can't get number of scanning phone" if group_id and group_id != group_id_db else None
         
         await self.channel_repo.update_connection_status(
