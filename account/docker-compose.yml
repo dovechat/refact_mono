@@ -1,0 +1,64 @@
+services:
+  db:
+    image: postgres:16-alpine
+    networks:
+      - account_dchat_net
+    container_name: postgres-dchat
+    restart: always
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - ../.env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+
+  rdb:
+    image: "redis:alpine"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - account_dchat_net
+
+  account:
+    build: .
+    image: account:1
+    volumes:
+      - ..:/mono
+      - ../infra:/mono/infra
+      - .:/mono/account
+      - ../repo:/mono/repo
+      - ../schemas:/mono/schemas
+      - ../models:/mono/models
+      - ../core:/mono/core
+      - ../services:/mono/services
+      - ../.env:/mono/.env
+    env_file:
+      - ../.env
+    working_dir: /mono/account
+    command: python3 -m app.api.main
+    networks:
+      - account_dchat_net
+    depends_on:
+      db:
+        condition: service_healthy
+      rdb:
+        condition: service_healthy
+
+ 
+
+volumes:
+  postgres_data:
+
+networks:
+  account_dchat_net:
+    external: true
+    # driver: bridge

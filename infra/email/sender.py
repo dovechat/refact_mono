@@ -1,0 +1,64 @@
+from jinja2 import Environment, FileSystemLoader
+import os
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
+from core.config import settings
+
+import logging
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+log = logging.getLogger(__name__)
+
+class BaseEmailSender:
+    def __init__(self):
+        self.conf = settings
+        template_dir = os.path.dirname(__file__)
+        self.jinja_env = Environment(loader=FileSystemLoader(template_dir))
+
+    def _render(self, template_name: str, **context) -> str:
+        return self.jinja_env.get_template(template_name).render(**context)
+
+    def _create_message(self, subject: str, html: str, to_email: str = "donrodrigess@gmail.com",) -> MIMEMultipart:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = settings.smtp_from
+        msg['To'] = to_email
+        log.info(f"\n\n user {settings.smtp_user} password {settings.smtp_password} \n\n")
+        log.info(f"\n\n ++++++++++++++ to_email {to_email} ++++++++++++++ \n\n")
+        msg.attach(MIMEText(html, 'html'))
+        return msg
+
+    def _send_raw(self, msg: MIMEMultipart) ->bool:
+        log.info(f"\n\n -------------  _send_raw start ----------- \n\n")
+        try:
+            log.info(f"\n\n -------------  _send_raw try ----------- \n\n")
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+                log.info(f"\n\n -------------  _send_raw with ----------- \n\n")
+                server.starttls()
+                log.info(f"\n\n -------------  _send_raw starttls ----------- \n\n")
+                server.ehlo()
+                log.info(f"\n\n -------------  _send_raw ehlo ----------- \n\n")
+                server.login(settings.smtp_user, settings.smtp_password)
+                log.info(f"\n\n -------------  _send_raw login ----------- \n\n")
+                server.send_message(msg)
+            return True
+            log.info(f"\n\n -------------  _send_raw try after ----------- \n\n")
+        except Exception as e:
+            log.error(f"Email error: {e}")
+            return False
+
+class OTPSender(BaseEmailSender):
+    def send(self, to_email: str, code: str) -> bool:
+        html = self._render('otp.html', subject=settings.otp_subject, code=code)
+        log.info(f"\n\n ------------- render ------------ \n\n")
+        msg = self._create_message(settings.otp_subject, html, to_email)
+        log.info(f"\n\n ------------- _create_message ------------ \n\n")
+        res = self._send_raw(msg)
+        log.info(f"\n\n -------------  _send_raw res {res} ----------- \n\n")
+        return res
+
+class ManagerSender(BaseEmailSender):
+    def send(self, to_email: str, password: str) -> bool:
+        html = self._render('manager.html', subject=settings.manager_subject, password=password)
+        msg = self._create_message(settings.manager_subject, html, to_email)
+        return self._send_raw(msg)

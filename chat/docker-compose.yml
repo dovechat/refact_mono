@@ -1,0 +1,34 @@
+services:
+  chat:
+    build: .
+    image: chat:1
+    environment:
+      PYTHONPATH: /mono
+    volumes:
+      - ..:/mono
+      - ../infra:/mono/infra
+      # - .:/mono/chat
+      - ../repo:/mono/repo
+      - ../schemas:/mono/schemas
+      - ../models:/mono/models
+      - ../api:/mono/api
+      - ../core:/mono/core
+      - ../services:/mono/services
+      - ../.env:/mono/.env
+    working_dir: /mono/chat
+    env_file:
+      - ../.env
+    ports:
+      - "8001:8001"
+    networks:
+      - account_dchat_net 
+    command: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8001"]
+
+
+# Telegram теперь обслуживается отдельным сервисом tg_connector
+# (см. /opt/dchat/dchat_refact/tg_connector), поэтому сервисы
+# telegram-consumer-user / telegram-consumer-bot удалены.
+
+networks:
+  account_dchat_net:
+    external: true

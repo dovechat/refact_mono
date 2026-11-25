@@ -1,0 +1,121 @@
+"""change crm_type to channel type in converations, add crm_line_id and channel_type in crm_connections
+
+Revision ID: 92c455553d7e
+Revises: 08bbc997a492
+Create Date: 2026-05-20 19:25:37.882317
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = '92c455553d7e'
+down_revision = '08bbc997a492'
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.drop_index(
+        op.f('ix_conversations_line_id_crm_type'),
+        table_name='conversations'
+    )
+
+    op.alter_column(
+        'conversations',
+        'crm_type',
+        new_column_name='channel_type',
+        existing_type=sa.String(),
+        nullable=False,
+    )
+
+    op.create_index(
+        'ix_conversations_line_id_channel_type',
+        'conversations',
+        ['line_id', 'channel_type'],
+        unique=False
+    )
+
+    op.add_column(
+        'crm_connections',
+        sa.Column('channel_type', sa.String(), nullable=True)
+    )
+
+    op.add_column(
+        'crm_connections',
+        sa.Column('crm_line_id', sa.String(), nullable=True)
+    )
+
+    op.execute("""
+        ALTER TABLE crm_connections
+        ALTER COLUMN line_id
+        TYPE UUID
+        USING line_id::uuid
+    """)
+
+    op.alter_column(
+        'crm_connections',
+        'line_id',
+        nullable=True
+    )
+
+    op.create_index(
+        op.f('ix_crm_connections_line_id'),
+        'crm_connections',
+        ['line_id'],
+        unique=False
+    )
+
+    op.create_foreign_key(
+        None,
+        'crm_connections',
+        'lines',
+        ['line_id'],
+        ['id'],
+        ondelete='SET NULL'
+    )
+
+
+def downgrade() -> None:
+    op.drop_constraint(
+        None,
+        'crm_connections',
+        type_='foreignkey'
+    )
+
+    op.drop_index(
+        op.f('ix_crm_connections_line_id'),
+        table_name='crm_connections'
+    )
+
+    op.alter_column(
+        'crm_connections',
+        'line_id',
+        existing_type=sa.UUID(),
+        type_=sa.VARCHAR(),
+        nullable=False
+    )
+
+    op.drop_column('crm_connections', 'crm_line_id')
+    op.drop_column('crm_connections', 'channel_type')
+
+    op.drop_index(
+        'ix_conversations_line_id_channel_type',
+        table_name='conversations'
+    )
+
+    op.alter_column(
+        'conversations',
+        'channel_type',
+        new_column_name='crm_type',
+        existing_type=sa.String(),
+        nullable=False,
+    )
+
+    op.create_index(
+        op.f('ix_conversations_line_id_crm_type'),
+        'conversations',
+        ['line_id', 'crm_type'],
+        unique=False
+    )
