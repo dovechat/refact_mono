@@ -1,9 +1,11 @@
 import uuid
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse
 from app.schemas.vk_oauth_schemas import VKOAuthStartResponse, VKOAuthConfirmRequest
 from app.services.vk_oauth_service import VKOAuthService
+from core.config import settings
 from app.core.dependencies import (
     check_tenant_access,
     get_channel_account_repo,
@@ -41,18 +43,18 @@ async def vk_oauth_callback(
     error: str | None = Query(default=None),
     service: VKOAuthService = Depends(get_vk_oauth_service),
 ):
+    result_url = settings.VK_OAUTH_RESULT_URL
     if error or not code or not state:
-        return RedirectResponse(f"https://tg.dove-chat.pro/dev/lc/vk-oauth-result?error={error or 'no_code'}")
+        return RedirectResponse(f"{result_url}?{urlencode({'error': 'no_code'})}")
 
     try:
         payload, groups = await service.handle_callback(code, state)
     except Exception as e:
-        return RedirectResponse(f"https://tg.dove-chat.pro/dev/lc/vk-oauth-result?error={type(e).__name__}")
+        log.warning("vk oauth callback failed: %s", type(e).__name__)
+        return RedirectResponse(f"{result_url}?{urlencode({'error': type(e).__name__})}")
 
-    groups_json = "&".join(f"g={g.id}:{g.name}" for g in groups)
-    return RedirectResponse(
-        f"https://tg.dove-chat.pro/dev/lc/vk-oauth-result?payload={payload}&{groups_json}"
-    )
+    query = [("payload", payload)] + [("g", f"{g.id}:{g.name}") for g in groups]
+    return RedirectResponse(f"{result_url}?{urlencode(query)}")
 
 
 @vk_oauth_router.post("/confirm")

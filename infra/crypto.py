@@ -1,18 +1,22 @@
+import base64
+import os
+from functools import lru_cache
+
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-import os, base64
 
-b64_key = os.environ["APP_ENCRYPTION_KEY"]
-key = base64.b64decode(b64_key)
-aes = AESGCM(key)
 
-def encrypt(text: str) -> str:
-    data = text.encode("utf-8")
+@lru_cache(maxsize=1)
+def _aes() -> AESGCM:
+    return AESGCM(base64.b64decode(os.environ["APP_ENCRYPTION_KEY"]))
+
+
+def encrypt(text: str, aad: bytes | None = None) -> str:
     nonce = os.urandom(12)
-    ct = aes.encrypt(nonce, data, None)
+    ct = _aes().encrypt(nonce, text.encode("utf-8"), aad)
     return base64.b64encode(nonce + ct).decode()
 
-def decrypt(token: str) -> bytes:
+
+def decrypt(token: str, aad: bytes | None = None) -> str:
     raw = base64.b64decode(token)
     nonce, ct = raw[:12], raw[12:]
-    return aes.decrypt(nonce, ct, None).decode("utf-8")
-
+    return _aes().decrypt(nonce, ct, aad).decode("utf-8")

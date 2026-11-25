@@ -106,6 +106,7 @@ class Settings(BaseSettings):
     VK_OAUTH_CLIENT_SECRET: str = ""
     VK_OAUTH_REDIRECT_URI: str = "https://tg.dove-chat.pro/dev/crm/api/v1/vk/oauth/callback"
     VK_OAUTH_SCOPE: str = "groups,manage"
+    VK_OAUTH_RESULT_URL: str = "https://tg.dove-chat.pro/dev/lc/vk-oauth-result"
     VK_TEMP_GROUP_ID: str = ""
     VK_TEMP_TOKEN: str = ""
     VK_TEMP_SECRET_KEY: str = ""

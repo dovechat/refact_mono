@@ -4,6 +4,7 @@ import json
 import os
 import time
 import uuid
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import HTTPException
@@ -17,6 +18,8 @@ VK_TOKEN_URL = "https://id.vk.com/oauth2/auth"
 VK_API_URL = "https://api.vk.com/method"
 VK_API_VERSION = "5.199"
 STATE_TTL = 600
+AAD_STATE = b"vk_oauth_state"
+AAD_PAYLOAD = b"vk_oauth_payload"
 
 
 class VKOAuthService:
@@ -49,17 +52,17 @@ class VKOAuthService:
             "code_verifier": code_verifier,
             "exp": int(time.time()) + STATE_TTL,
         })
-        state = encrypt(state_raw)
+        state = encrypt(state_raw, AAD_STATE)
 
-        params = (
-            f"client_id={settings.VK_OAUTH_CLIENT_ID}"
-            f"&redirect_uri={settings.VK_OAUTH_REDIRECT_URI}"
-            f"&response_type=code"
-            f"&scope={settings.VK_OAUTH_SCOPE}"
-            f"&state={state}"
-            f"&code_challenge={code_challenge}"
-            f"&code_challenge_method=S256"
-        )
+        params = urlencode({
+            "client_id": settings.VK_OAUTH_CLIENT_ID,
+            "redirect_uri": settings.VK_OAUTH_REDIRECT_URI,
+            "response_type": "code",
+            "scope": settings.VK_OAUTH_SCOPE,
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        })
         return f"{VK_AUTHORIZE_URL}?{params}"
 
     async def handle_callback(
@@ -67,7 +70,7 @@ class VKOAuthService:
         code: str,
         state: str,
     ) -> tuple[str, list[VKGroupOption]]:
-        state_data = json.loads(decrypt(state))
+        state_data = json.loads(decrypt(state, AAD_STATE))
         if state_data["exp"] < int(time.time()):
             raise ValueError("state_expired")
 
@@ -113,9 +116,10 @@ class VKOAuthService:
             "tenant_id": state_data["tenant_id"],
             "line_id": state_data["line_id"],
             "user_access_token": user_access_token,
+            "group_ids": [g.id for g in groups],
             "exp": int(time.time()) + STATE_TTL,
         })
-        payload = encrypt(payload_raw)
+        payload = encrypt(payload_raw, AAD_PAYLOAD)
         return payload, groups
 
     async def confirm_group(
@@ -125,7 +129,7 @@ class VKOAuthService:
         tenant_id: uuid.UUID,
         line_id: uuid.UUID,
     ):
-        data = json.loads(decrypt(payload))
+        data = json.loads(decrypt(payload, AAD_PAYLOAD))
         if data["exp"] < int(time.time()):
             raise ValueError("payload_expired")
         if (
@@ -133,6 +137,8 @@ class VKOAuthService:
             or data["line_id"] != str(line_id)
         ):
             raise ValueError("payload_mismatch")
+        if group_id not in data.get("group_ids", []):
+            raise ValueError("group_not_allowed")
         await self.ensure_line(tenant_id, line_id)
 
         # TODO: получение токена сообщества (community access_token) —

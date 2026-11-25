@@ -118,6 +118,29 @@ def check_tenant_access(tenant_id: uuid.UUID, current_user: UserContext = Depend
         raise HTTPException(status_code=403, detail="No membership in tenant")
     return tenant_id
 
+def check_tenant_manager(tenant_id: uuid.UUID, current_user: UserContext = Depends(get_current_user)):
+    if current_user.role == 'admin':
+        return tenant_id
+    if current_user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Token tenant_id mismatch")
+    if current_user.member not in ('owner', 'admin'):
+        raise HTTPException(status_code=403, detail="Owner or admin role required")
+    return tenant_id
+
+def check_tenant_owner(tenant_id: uuid.UUID, current_user: UserContext = Depends(get_current_user)):
+    if current_user.role == 'admin':
+        return tenant_id
+    if current_user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Token tenant_id mismatch")
+    if current_user.member != 'owner':
+        raise HTTPException(status_code=403, detail="Owner role required")
+    return tenant_id
+
+def require_system_admin(current_user: UserContext = Depends(get_current_user)) -> UserContext:
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="System admin role required")
+    return current_user
+
 async def get_requisits_repo(db: AsyncSession = Depends(get_db)) -> RequisitsRepository:
     """Get requisits repository instance."""
     return RequisitsRepository(db)
