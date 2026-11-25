@@ -1,10 +1,10 @@
 from pydantic import BaseModel, ConfigDict
 from uuid import UUID
-from typing import Optional
+from typing import Literal, Optional
 
 class MemberCreate(BaseModel):
     email: str
-    role: str  # 'owner' или 'member'
+    role: Literal["admin", "member"]
 
 class MemberResponse(BaseModel):
     id: UUID

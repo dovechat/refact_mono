@@ -443,8 +443,32 @@ class ChannelAccountService:
 
         log.info(f"******** channel_service connect_whatsapp_green return qr")
 
-        return {"qr": qr, "id_instance": instance.external_id, "api_token": token}
+        return {"qr": qr, "id_instance": instance.external_id}
 
+
+    async def get_pending_qr(
+            self,
+            line_id: uuid.UUID,
+            tenant_id: uuid.UUID,
+    ) -> str:
+        """QR for the instance reserved for this line (token stays here)"""
+        await self._verify_line_exists(line_id, tenant_id)
+        account = await self.channel_repo.get_by_line_and_type(
+            line_id, ChannelType.WHATSAPP_GREEN
+        )
+        pending_id = None
+        if account and account.state_json:
+            pending_id = account.state_json.get("pending_instance_id")
+        if not pending_id:
+            raise HTTPException(
+                400, "Нет pending-инстанса. Сначала подключите инстанс."
+            )
+        instance = await self.instance_repo.get_by_id(pending_id)
+        if not instance or not instance.token:
+            raise HTTPException(400, "Некорректный инстанс")
+        return await self.get_qr_from_green(
+            instance.external_id, decrypt(instance.token)
+        )
 
     async def _set_green_webhook(self, line_id, id_instance, api_token):
         green_wh_url = f"{settings.proxy_green_url}/waInstance{id_instance}/setSettings/{api_token}"

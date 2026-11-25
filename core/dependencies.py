@@ -70,10 +70,9 @@ async def get_current_user(
     cache_key = f"user:{token_data.sub}"
 
     cached_user = await rdb.get(cache_key)
+    user_data = json.loads(cached_user) if cached_user else None
 
-    if cached_user:
-        user_data = json.loads(cached_user)
-    else:
+    if not user_data or "status" not in user_data:
         user = await user_repo.get_by_id(token_data.sub)
 
         if not user:
@@ -82,6 +81,7 @@ async def get_current_user(
         user_data = {
             "id": str(user.id),
             "email": user.email,
+            "status": getattr(user.status, "value", user.status),
         }
 
         await rdb.setex(
@@ -93,10 +93,23 @@ async def get_current_user(
     return UserContext(
         id=user_data["id"],
         email=user_data["email"],
+        status=user_data["status"],
         role=token_data.role,
         member=token_data.member,
         tenant_id=token_data.tenant_id,
     )
+
+
+async def get_verified_user(
+    current_user: UserContext = Depends(get_current_user),
+) -> UserContext:
+    """Current user, only if the account is verified and not blocked."""
+    if current_user.status not in ("trial", "active"):
+        raise HTTPException(
+            status_code=403,
+            detail="Account is not verified",
+        )
+    return current_user
 
 # ------- tenants
 async def get_tenant_repo(db: AsyncSession = Depends(get_db)) -> TenantRepository:

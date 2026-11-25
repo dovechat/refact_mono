@@ -1,6 +1,8 @@
-import random
+import hmac
+import secrets
 import uuid
 
+import bcrypt
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +19,12 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
+
+LOGIN_MAX_FAILS = 5
+LOGIN_FAIL_TTL = 900
+OTP_TTL = 600
+OTP_MAX_ATTEMPTS = 10
+_DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode("utf-8")
 
 
 async def is_throttled(key: str, seconds: int) -> bool:
@@ -67,17 +75,24 @@ class AuthService:
         tenant_id: int | str | uuid.UUID | None = None,
     ) -> TokenPair:
         """User login"""
+        fail_key = f"login_fail:{request.email.lower()}"
+        fails = await rdb.get(fail_key)
+        if fails and int(fails) >= LOGIN_MAX_FAILS:
+            raise HTTPException(status_code=429, detail="Too many requests")
+
         user_repo = UserRepository(db)
         user = await user_repo.get_by_email(request.email)
-        if not user or not self.jwt_service.verify_password(
-            request.password, user.password_hash
-        ):
-            if await is_throttled(f"login:{request.email}", 5):
-                raise HTTPException(status_code=429, detail="Too many requests")
+        hashed = user.password_hash if user and user.password_hash else _DUMMY_HASH
+        valid = self.jwt_service.verify_password(request.password, hashed)
+        if not user or not user.password_hash or not valid:
+            fails = await rdb.incr(fail_key)
+            if fails == 1:
+                await rdb.expire(fail_key, LOGIN_FAIL_TTL)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
             )
+        await rdb.delete(fail_key)
 
         role = None
         if user.role:
@@ -107,10 +122,10 @@ class AuthService:
         user = await user_repo.create_user(data)
 
         # Generate 4-digit code
-        code = f"{random.randint(0, 9999):04d}"
-        log.info(f"VERIFICATION CODE FOR {data.email}: {code}")
+        code = f"{secrets.randbelow(10000):04d}"
 
-        await rdb.setex(f"auth:{str(user.id)}", 600, code)
+        await rdb.setex(f"auth:{str(user.id)}", OTP_TTL, code)
+        await rdb.delete(f"auth_attempts:{user.id}")
 
         if await is_throttled(f"otp:{data.email}", 60):
             raise HTTPException(status_code=429, detail="Too many requests")
@@ -162,9 +177,21 @@ class AuthService:
 
         # 3. Code validation
         stored_code = await rdb.get(f"auth:{user_id}")
-        log.info(f"AUTH_VERIFY: provided={code} stored={stored_code}")
+        if not stored_code:
+            log.info(f"AUTH_VERIFY: invalid_code for user={user_id}")
+            return "invalid_code"
 
-        if not stored_code or stored_code != code:
+        attempts_key = f"auth_attempts:{user_id}"
+        attempts = await rdb.incr(attempts_key)
+        if attempts == 1:
+            await rdb.expire(attempts_key, OTP_TTL)
+        if attempts > OTP_MAX_ATTEMPTS:
+            log.warning(f"AUTH_VERIFY: too many attempts user={user_id}")
+            return "too_fast"
+
+        if not hmac.compare_digest(
+            str(stored_code).encode(), str(code).encode()
+        ):
             log.info(f"AUTH_VERIFY: invalid_code for user={user_id}")
             return "invalid_code"
 
@@ -172,6 +199,8 @@ class AuthService:
         user.status = UserStatus.trial
         await user_repo.update(user)
         await rdb.delete(f"auth:{user_id}")
+        await rdb.delete(attempts_key)
+        await rdb.delete(f"user:{user_id}")
         log.info(f"AUTH_VERIFY: ok for user={user_id}")
 
         return "ok"

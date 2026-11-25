@@ -47,10 +47,11 @@ def get_vk_oauth_service(
 
 @channel_router.get("/start", response_model=VKOAuthStartResponse)
 async def vk_oauth_start(
-    tenant_id: uuid.UUID,
     line_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(check_tenant_access),
     service: VKOAuthService = Depends(get_vk_oauth_service),
 ) -> VKOAuthStartResponse:
+    await service.ensure_line(tenant_id, line_id)
     url = service.build_authorize_url(tenant_id, line_id)
     return VKOAuthStartResponse(authorize_url=url)
 
@@ -81,9 +82,13 @@ async def vk_oauth_callback(
 @channel_router.post("/confirm")
 async def vk_oauth_confirm(
     body: VKOAuthConfirmRequest,
+    line_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(check_tenant_access),
     service: VKOAuthService = Depends(get_vk_oauth_service),
 ):
-    return await service.confirm_group(body.payload, body.group_id)
+    return await service.confirm_group(
+        body.payload, body.group_id, tenant_id, line_id
+    )
 
 
 @channel_router.get("/", response_model=list[ChannelAccountResponse])
@@ -162,7 +167,12 @@ async def get_whatsapp_qr(
     service: ChannelAccountService = Depends(get_channel_service)
 ):
     """Получить QR-код от Green API"""
-    qr_data = await service.get_qr_from_green(data.id_instance, data.api_token)
+    if data.id_instance and data.api_token:
+        qr_data = await service.get_qr_from_green(
+            data.id_instance, data.api_token
+        )
+    else:
+        qr_data = await service.get_pending_qr(line_id, tenant_id)
     return {"qr": qr_data}
 
 

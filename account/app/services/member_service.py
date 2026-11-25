@@ -88,6 +88,8 @@ class MemberService:
         member = await self.member_repo.get_by_user_and_tenant(user_id, tenant_id)
         if not member:
             raise ValueError("Member not found")
+        if member.role == "owner":
+            raise ValueError("Owner can't be removed")
 
         await self.member_repo.delete(member)
 
@@ -141,7 +143,7 @@ class MemberService:
             resource_type="line",
             resource_id=line_id
         )
-        if not permission:
+        if not permission or permission.tenant_id != tenant_id:
             raise ValueError("Permission not found")
 
         await self.permission_repo.delete(permission)

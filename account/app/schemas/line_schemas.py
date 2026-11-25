@@ -51,15 +51,6 @@ class ChannelCreate(BaseModel):
 
 class LineUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    status: Optional[LineStatus] = None
-    connection_state: Optional[Dict[str, str]] = None
-
-    @field_validator('connection_state', mode='before')
-    @classmethod
-    def validate_connection_state(cls, v):
-        if isinstance(v, str):
-            return json.loads(v)
-        return v
 
 
 class LineResponse(BaseModel):

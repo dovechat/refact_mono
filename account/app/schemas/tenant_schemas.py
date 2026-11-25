@@ -63,6 +63,17 @@ class TenantCreate(Tenant):
     pass
     
 
+class TenantUpdate(BaseModel):
+    """Partial update of tenant by its manager (status is not editable)"""
+    name: str | None = Field(None, min_length=1, max_length=255)
+    locale: str | None = Field(None, max_length=10)
+    payment: TenantPayment | None = None
+    address: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    inn: str | None = Field(None, max_length=12)
+
+
 class BankDetailsResponse(BankDetailsCreate):
     model_config = ConfigDict(from_attributes=True)
 

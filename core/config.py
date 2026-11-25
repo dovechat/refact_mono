@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     project_dir: str = "/opt/dovechat"
 
     # Database
-    database_url: str = "..."
+    database_url: str
 
     # JWT
-    secret_key: str = "..."
+    secret_key: str
     algorithm: str = "HS256"
 
     # Service-to-service auth for /internal/* endpoints (chat <-> crm)

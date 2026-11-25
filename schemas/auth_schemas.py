@@ -65,6 +65,7 @@ class UserContext(BaseModel):
     tenant_id: uuid.UUID | None = None
     role: UserRole | None = None
     member: str | None = None
+    status: str | None = None
 
     def is_owner(self) -> bool:
         """Check if user is admin or owner"""

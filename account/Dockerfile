@@ -3,6 +3,7 @@ FROM python:3.12-slim
  # change to project name
 WORKDIR /mono
 COPY core core/
+COPY infra infra/
 # change to service name
 COPY account account/
 COPY models models/
@@ -11,7 +12,6 @@ COPY schemas schemas/
 COPY services services/
 COPY alembic ./alembic
 COPY alembic.ini ./
-COPY .env ./
 
 # change to project/service name
 WORKDIR /mono/account

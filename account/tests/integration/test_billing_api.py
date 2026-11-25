@@ -34,6 +34,7 @@ async def test_adjust_balance(client, test_tenant, token_with_tenant):
         },
         headers=token_with_tenant
     )
+    assert response.status_code == 403
     '''
     assert response.status_code == 200
     data = response.json()

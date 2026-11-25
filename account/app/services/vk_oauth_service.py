@@ -6,6 +6,7 @@ import time
 import uuid
 
 import httpx
+from fastapi import HTTPException
 
 from core.config import settings
 from infra.crypto import encrypt, decrypt
@@ -22,6 +23,15 @@ class VKOAuthService:
     def __init__(self, channel_repo, line_repo):
         self.channel_repo = channel_repo
         self.line_repo = line_repo
+
+    async def ensure_line(
+        self,
+        tenant_id: uuid.UUID,
+        line_id: uuid.UUID,
+    ) -> None:
+        line = await self.line_repo.get_line_by_id(line_id, tenant_id)
+        if not line:
+            raise HTTPException(status_code=404, detail="Line not found")
 
     def build_authorize_url(
         self,
@@ -108,10 +118,22 @@ class VKOAuthService:
         payload = encrypt(payload_raw)
         return payload, groups
 
-    async def confirm_group(self, payload: str, group_id: int):
+    async def confirm_group(
+        self,
+        payload: str,
+        group_id: int,
+        tenant_id: uuid.UUID,
+        line_id: uuid.UUID,
+    ):
         data = json.loads(decrypt(payload))
         if data["exp"] < int(time.time()):
             raise ValueError("payload_expired")
+        if (
+            data["tenant_id"] != str(tenant_id)
+            or data["line_id"] != str(line_id)
+        ):
+            raise ValueError("payload_mismatch")
+        await self.ensure_line(tenant_id, line_id)
 
         # TODO: получение токена сообщества (community access_token) —
         # у VK это отдельный обмен (group_ids + scope manage/messages при

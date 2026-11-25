@@ -2,7 +2,11 @@ import uuid
 from fastapi import APIRouter, Depends, status, Query
 from fastapi.security import HTTPBearer
 from core.dependencies import get_current_user
-from app.core.dependencies import check_tenant_access, get_billing_service
+from app.core.dependencies import (
+    check_tenant_access,
+    get_billing_service,
+    require_system_admin,
+)
 from app.schemas.billing_schemas import (
     BalanceResponse,
     BalanceAdjust,
@@ -56,7 +60,7 @@ async def get_balance(
 @billing_router.post("/balance/adjust", response_model=BalanceResponse)
 async def adjust_balance(
     data: BalanceAdjust,
-    current_user: UserContext = Depends(get_current_user),
+    current_user: UserContext = Depends(require_system_admin),
     tenant_id: uuid.UUID = Depends(check_tenant_access),
     billing_service: BillingService = Depends(get_billing_service)
 ) -> BalanceResponse:
@@ -104,7 +108,7 @@ async def get_payments(
 async def update_payment_status(
     payment_id: uuid.UUID,
     data: PaymentStatusUpdate,
-    current_user: UserContext = Depends(get_current_user),
+    current_user: UserContext = Depends(require_system_admin),
     tenant_id: uuid.UUID = Depends(check_tenant_access),
     billing_service: BillingService = Depends(get_billing_service)
 ) -> PaymentResponse:
@@ -126,7 +130,7 @@ async def get_tariffs(
 @tariff_router.post("/", response_model=TariffResponse, status_code=status.HTTP_201_CREATED)
 async def create_tariff(
     data: TariffCreate,
-    current_user: UserContext = Depends(get_current_user),
+    current_user: UserContext = Depends(require_system_admin),
     billing_service: BillingService = Depends(get_billing_service)
 ) -> TariffResponse:
     """Create new tariff (admin only)"""
@@ -137,7 +141,7 @@ async def create_tariff(
 async def update_tariff(
     tariff_id: uuid.UUID,
     data: TariffUpdate,
-    current_user: UserContext = Depends(get_current_user),
+    current_user: UserContext = Depends(require_system_admin),
     billing_service: BillingService = Depends(get_billing_service)
 ) -> TariffResponse:
     """Update tariff (admin only)"""
