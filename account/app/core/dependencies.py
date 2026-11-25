@@ -143,9 +143,8 @@ async def get_line_service(
 ) -> LineService:
     return LineService(billing_repo, ledger_repo, line_repo, instance_repo, channel_account_repo, user_repo)
 
-async def get_webhook_service():
-    async for session in get_db():
-        line_repo = LineRepository(session)
-        channel_repo = ChannelAccountRepository(session)
-        yield WebhookService(line_repo, channel_repo)
-        break
+async def get_webhook_service(
+    line_repo: LineRepository = Depends(get_line_repo),
+    channel_repo: ChannelAccountRepository = Depends(get_channel_account_repo),
+) -> WebhookService:
+    return WebhookService(line_repo, channel_repo)

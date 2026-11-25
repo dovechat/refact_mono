@@ -192,7 +192,12 @@ class ChannelAccountService:
         encrypted = self._encrypt_credentials(credentials.model_dump())
         account = await self.channel_repo.get_by_line_and_type(line_id, ChannelType.TELEGRAM_BOT)
         if account:
-            updated = await self.channel_repo.update_account(account, credentials_encrypted=encrypted)
+            updated = await self.channel_repo.update_account(
+                account,
+                credentials_encrypted=encrypted,
+                phone=phone,
+                connection_status="connected",
+            )
         else:
             updated = await self.channel_repo.create_account(
                 line_id=line_id,
@@ -200,7 +205,6 @@ class ChannelAccountService:
                 credentials_encrypted=encrypted,
                 phone=phone
             )
-        await self.channel_repo.update_account(account, connection_status="connected", phone=phone)
         await self.set_webhook(line_id, credentials.bot_token, token)
         return ChannelAccountResponse(
             id=updated.id,
@@ -405,6 +409,12 @@ class ChannelAccountService:
             raise HTTPException(400, "WhatsApp Green account already exists for this line")
         '''
         account = await self.channel_repo.get_by_line_and_type(line_id, ChannelType.WHATSAPP_GREEN)
+        if not account:
+            account = await self.channel_repo.create_account(
+                line_id=line_id,
+                channel_type=ChannelType.WHATSAPP_GREEN,
+                credentials_encrypted={},
+            )
         # 3. Берём свободный инстанс
         log.info(f"******** channel_service connect_whatsapp_green account {account}")
         instance = await self.instance_repo.get_free_green_instance()
@@ -433,9 +443,6 @@ class ChannelAccountService:
         qr = await self.get_qr_from_green(instance.external_id, token)
 
         log.info("connect_whatsapp_green qr received")
-
-        # 5. Сохраняем временные данные (например, в state_json линии)
-        await self.line_repo.update(line, state_json={"pending_instance_id": str(instance.id), "qr": qr})
 
         log.info(f"******** channel_service connect_whatsapp_green return qr")
 
@@ -647,14 +654,16 @@ class ChannelAccountService:
             await self._vk_set_callback_settings(client, credentials.group_id, server_id, credentials.access_token)
 
         encrypted = self._encrypt_credentials(creds_dict)
-        account = await self.channel_repo.get_by_line_and_type(line_id, "vk")
+        account = await self.channel_repo.get_by_line_and_type(line_id, ChannelType.VK)
 
         if account:
             updated = await self.channel_repo.update_account(account, credentials_encrypted=encrypted)
         else:
-            updated = await self.channel_repo.create_account(line_id=line_id, credentials_encrypted=encrypted)
-
-        line = await self.line_repo.get_line_by_id(line_id, tenant_id)
+            updated = await self.channel_repo.create_account(
+                line_id=line_id,
+                channel_type=ChannelType.VK,
+                credentials_encrypted=encrypted,
+            )
 
         return ChannelAccountResponse(
             id=updated.id,
@@ -663,14 +672,6 @@ class ChannelAccountService:
             state_json=updated.state_json,
             updated_at=updated.updated_at.isoformat() if updated.updated_at else None
         )
-
-    async def line_cleanup(self, line_id: uuid.UUID, tenant_id: uuid.UUID):
-        accounts = await self.get_accounts(line_id, tenant_id)
-        for account in accounts:
-            await cleanup_service.cleanup_line(line_id, channel_type=account.channel_type)
-        return {"status": "ok"}
-
-
 
     '''
     Needs to move to connector service, it's shouldn't belong to account service 

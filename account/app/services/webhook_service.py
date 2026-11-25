@@ -76,35 +76,28 @@ class WebhookService:
         # Обновляем статус в channel_accounts
         group_id = payload.get("group_id", None)
 
-        channel_acc = await self.channel_repo.get_by_line_and_type(line_id, 'vk')
+        channel_acc = await self.channel_repo.get_by_line_and_type(line_id, ChannelType.VK)
+        if not channel_acc:
+            raise HTTPException(status_code=404, detail="VK account not found")
         creds_js = decrypt(channel_acc.credentials_encrypted.get("encrypted_data",""))
         creds = json.loads(creds_js)
         group_id_db = creds.get("group_id", "")
         confirmation_code = creds.get("confirmation_code", "")
         log.info(f"------- group_id {group_id} group_id_db {group_id_db}")
-        connection_error = "can't get number of scanning phone" if group_id and group_id != group_id_db else None
-        
+        mismatch = bool(group_id) and str(group_id) != str(group_id_db)
+        connection_error = "group_id mismatch" if mismatch else None
+        status = "error" if mismatch else "connected"
+
         await self.channel_repo.update_connection_status(
             line_id=line_id,
-            status="connected",
+            status=status,
             channel_type=ChannelType.VK,
             connection_error=connection_error,
         )
         # Обновляем connection_state в lines
         await self.line_repo.update_connection_state(
             line_id=line_id,
-            state={"status": "connected"}
+            state={"status": status}
         )
-        log.info(f"Line {line_id} connected via VK")
+        log.info(f"Line {line_id} VK status: {status}")
         return confirmation_code
-
-
-# Фабрика для Depends
-async def get_webhook_service():
-    from app.repositories.line_repo import LineRepository, ChannelAccountRepository
-    from core.database import get_db
-
-    async with get_db() as session:
-        line_repo = LineRepository(session)
-        channel_repo = ChannelAccountRepository(session)
-        return WebhookService(line_repo, channel_repo)

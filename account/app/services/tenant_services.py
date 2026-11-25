@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from schemas.auth_schemas import UserContext
 from app.core.uow import TenantMembershipUoW
 from app.repositories.tenant_repo import RequisitsRepository, TenantRepository
-from app.repositories.membership_repo import MembershipRepository
 from app.schemas.tenant_schemas import  (
     BankDetailsRead,
     BankDetailsRUUpdate,
@@ -47,23 +46,6 @@ class TenantService:
         self, repo: TenantRepository
     ) -> None:
         self.repo = repo
-
-    async def create_tenant(
-            self,
-            user_id: uuid.UUID,
-            data: TenantCreate,
-    ) -> TenantResponse:
-        """Create new tenant and link owner via membership"""
-        tenant = await self.repo.create_tenant(data)
-
-        member_repo = MembershipRepository()
-        await member_repo.create(
-            user_id=user_id,
-            tenant_id=tenant.id,
-            role="admin"
-        )
-
-        return TenantResponse.model_validate(tenant)
 
     async def get_all_tenants(self, current_user: UserContext) -> list[TenantResponse]:
         """List tenants where the current user is an active member with count of members."""

@@ -1,5 +1,6 @@
 import uuid
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer
 from core.dependencies import get_current_user
 from app.core.dependencies import (

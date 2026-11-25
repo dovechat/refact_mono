@@ -151,4 +151,6 @@ class VKOAuthService:
         account = await self.channel_repo.get_by_line_and_type(line_id, "vk")
         if account:
             return await self.channel_repo.update_account(account, credentials_encrypted=encrypted)
-        return await self.channel_repo.create_account(line_id=line_id, credentials_encrypted=encrypted)
+        return await self.channel_repo.create_account(
+            line_id=line_id, channel_type="vk", credentials_encrypted=encrypted
+        )

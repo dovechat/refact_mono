@@ -10,12 +10,12 @@ from models.notifications import (
     NotificationChannel,
     NotificationStatus,
 )
-from account.app.repositories.membership_repo import MembershipRepository
-from account.app.repositories.notification_repo import NotificationRepository
+from app.repositories.membership_repo import MembershipRepository
+from app.repositories.notification_repo import NotificationRepository
 
 
 class NotificationService:
-    def __init__(self, repo: NotificationRepository, membership_repo: NotificationRepository):
+    def __init__(self, repo: NotificationRepository, membership_repo: MembershipRepository):
         self.repo = repo
         self.membership_repo = membership_repo
     # ============ NotificationSettings CRUD ============

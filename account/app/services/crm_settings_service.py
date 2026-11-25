@@ -1,4 +1,6 @@
 import uuid
+from fastapi import HTTPException
+from app.schemas.crm_settings_schemas import CrmSettingsRead
 from infra.crypto import decrypt, encrypt
 from repo.crm_repo import CrmAccountRepository, CrmSettingsRepository
 from models.crm import CrmAccount, CrmSettings
@@ -9,13 +11,17 @@ class CrmSettingsService:
         self.settings_repo = settings_repo
         self.account_repo = account_repo
 
-    async def get(self, tenant_id: uuid.UUID) -> dict:
+    async def get(self, tenant_id: uuid.UUID) -> CrmSettingsRead:
         settings = await self.settings_repo.get_by_tenant(tenant_id)
         account = await self.account_repo.get_by_tenant(tenant_id)
-        result = settings.__dict__.copy() if settings else {}
-        result["bitrix_client_id_set"] = bool(account and account.bitrix_client_id_enc)
-        result["bitrix_client_secret_set"] = bool(account and account.bitrix_client_secret_enc)
-        return result
+        if settings:
+            result = CrmSettingsRead.model_validate(settings)
+        else:
+            result = CrmSettingsRead(no_deal_action="nothing", auto_create_contact=True)
+        return result.model_copy(update={
+            "bitrix_client_id_set": bool(account and account.bitrix_client_id_enc),
+            "bitrix_client_secret_set": bool(account and account.bitrix_client_secret_enc),
+        })
 
     async def upsert(self, tenant_id: uuid.UUID, **data) -> CrmSettings:
         secrets = {k: data.pop(k) for k in list(data) if k in ("bitrix_client_id", "bitrix_client_secret")}
@@ -29,7 +35,7 @@ class CrmSettingsService:
     async def upsert_account(self, tenant_id: uuid.UUID, **secrets):
         account = await self.account_repo.get_by_tenant(tenant_id)
         if not account:
-            return
+            raise HTTPException(status_code=409, detail="CRM account is not connected")
         updating = {}
         if "bitrix_client_id" in secrets:
             updating["bitrix_client_id_enc"] = encrypt(secrets["bitrix_client_id"])

@@ -6,12 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
 from core.dependencies import get_current_user
-from account.app.core.dependencies import check_tenant_access
+from app.core.dependencies import check_tenant_access
 from schemas.auth_schemas import UserContext
-from account.app.repositories.notification_repo import NotificationRepository
-from account.app.repositories.membership_repo import MembershipRepository
-from account.app.services.notification_service import NotificationService
-from account.app.schemas.notification_schemas import (
+from app.repositories.notification_repo import NotificationRepository
+from app.repositories.membership_repo import MembershipRepository
+from app.services.notification_service import NotificationService
+from app.schemas.notification_schemas import (
     NotificationSettingsCreate,
     NotificationSettingsUpdate,
     NotificationSettingsResponse,
@@ -26,12 +26,6 @@ router = APIRouter(
     prefix="/tenants/{tenant_id}/notifications",
     dependencies=[Depends(auth_scheme)]
 )
-
-
-def check_tenant_access(tenant_id: uuid.UUID, current_user: UserContext = Depends(get_current_user)):
-    if current_user.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail="Token tenant_id mismatch")
-    return tenant_id
 
 
 def get_notification_service(db: AsyncSession = Depends(get_db)) -> NotificationService:

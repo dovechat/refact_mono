@@ -6,6 +6,8 @@ class CrmSettingsRead(BaseModel):
     no_deal_action: str
     auto_create_contact: bool
     responsible_user_id: Optional[str] = None
+    bitrix_client_id_set: bool = False
+    bitrix_client_secret_set: bool = False
 
     model_config = {"from_attributes": True}
 
