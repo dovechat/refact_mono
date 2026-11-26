@@ -18,6 +18,14 @@ from app.repositories.billing_repo import (
 )
 from app.services.admin_service import AdminService
 from app.services.billing_service import AdminBillingService
+from app.services.instance_service import AdminInstanceService
+from app.services.line_service import AdminLineService
+from app.services.stats_service import (
+    AdminAuditService,
+    AdminStatsService,
+)
+from app.services.tenant_service import AdminTenantService
+
 
 
 bearer_scheme = HTTPBearer()
@@ -49,6 +57,29 @@ async def get_billing_service(
     uow: AdminUnitOfWork = Depends(get_uow),
 ) -> AdminBillingService:
     return AdminBillingService(uow)
+
+async def get_line_service(
+    uow: AdminUnitOfWork = Depends(get_uow),
+) -> AdminLineService:
+    return AdminLineService(uow)
+
+
+async def get_tenant_service(
+    uow: AdminUnitOfWork = Depends(get_uow),
+) -> AdminTenantService:
+    return AdminTenantService(uow)
+
+
+async def get_stats_service(
+    uow: AdminUnitOfWork = Depends(get_uow),
+) -> AdminStatsService:
+    return AdminStatsService(uow)
+
+
+async def get_audit_service(
+    uow: AdminUnitOfWork = Depends(get_uow),
+) -> AdminAuditService:
+    return AdminAuditService(uow)
 
 
 async def get_admin_service(

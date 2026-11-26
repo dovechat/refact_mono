@@ -10,7 +10,8 @@ from schemas.auth_schemas import UserContext as User
 
 from app.core.dependencies import get_admin_service
 from app.core.uow import AdminUnitOfWork
-from app.services.admin_service import AdminLineService, AdminService
+from app.services.admin_service import AdminService
+from app.services.line_service import AdminLineService
 from app.schemas.admin_schemas import (
     BalanceAdjustmentRequest, ExtendLineRequest,
     InstanceCleanRequest, InstanceAdminResponse,

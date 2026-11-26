@@ -3,8 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from app.core.dependencies import AdminUser, DBSession
-from app.core.uow import AdminUnitOfWork
+from app.core.dependencies import AdminUser, LineService
 from app.schemas.admin_schemas import (
     ExtendLineRequest,
     LineListResponse,
@@ -12,14 +11,13 @@ from app.schemas.admin_schemas import (
     MessageResponse,
     SetLineStatusRequest,
 )
-from app.services.line_service import AdminLineService
 
 router = APIRouter(prefix="/lines", tags=["Admin — Lines"])
 
 
 @router.get("", response_model=LineListResponse)
 async def list_lines(
-    db: DBSession,
+    service: LineService,
     admin: AdminUser,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -29,8 +27,6 @@ async def list_lines(
     name: str | None = Query(None),
 ):
     """Список всех линий по всем тенантам с фильтрацией."""
-    uow = AdminUnitOfWork(db)
-    service = AdminLineService(uow)
     return await service.list_lines(
         skip=skip,
         limit=limit,
@@ -43,10 +39,12 @@ async def list_lines(
 
 
 @router.get("/{line_id}", response_model=LineOut)
-async def get_line(line_id: UUID, db: DBSession, admin: AdminUser):
+async def get_line(
+    line_id: UUID,
+    service: LineService,
+    admin: AdminUser,
+):
     """Детали линии."""
-    uow = AdminUnitOfWork(db)
-    service = AdminLineService(uow)
     return await service.get_line(line_id, actor_id=UUID(admin["sub"]))
 
 
@@ -54,26 +52,26 @@ async def get_line(line_id: UUID, db: DBSession, admin: AdminUser):
 async def set_line_status(
     line_id: UUID,
     request: SetLineStatusRequest,
-    db: DBSession,
+    service: LineService,
     admin: AdminUser,
 ):
     """
     Изменить статус линии.
     Используется для принудительной блокировки, разблокировки и т.д.
     """
-    uow = AdminUnitOfWork(db)
-    service = AdminLineService(uow)
-    return await service.set_line_status(line_id, request, actor_id=UUID(admin["sub"]))
+    return await service.set_line_status(
+        line_id, request, actor_id=UUID(admin["sub"])
+    )
 
 
 @router.post("/{line_id}/extend", response_model=MessageResponse)
 async def extend_line(
     line_id: UUID,
     request: ExtendLineRequest,
-    db: DBSession,
+    service: LineService,
     admin: AdminUser,
 ):
     """Продлить срок действия линии на указанное количество дней."""
-    uow = AdminUnitOfWork(db)
-    service = AdminLineService(uow)
-    return await service.extend_line(line_id, request, actor_id=UUID(admin["sub"]))
+    return await service.extend_line(
+        line_id, request, actor_id=UUID(admin["sub"])
+    )
