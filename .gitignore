@@ -13,3 +13,4 @@ venv/
 .DS_Store
 
 account/docker-compose.override.yml
+mono.tar.gz
