@@ -8,7 +8,8 @@ from core.database import get_db
 from core.dependencies import get_current_user
 from schemas.auth_schemas import UserContext as User
 
-from  app.core.uow import AdminUnitOfWork
+from app.core.dependencies import get_admin_service
+from app.core.uow import AdminUnitOfWork
 from app.services.admin_service import AdminLineService, AdminService
 from app.schemas.admin_schemas import (
     BalanceAdjustmentRequest, ExtendLineRequest,
@@ -39,11 +40,11 @@ async def require_superadmin(current_user: User = Depends(get_current_user)):
 async def list_tenants(
         skip: int = Query(0),
         limit: int = Query(50),
-        db: AsyncSession = Depends(get_db),
+        service: AdminService = Depends(get_admin_service),
         user: User = Depends(require_superadmin)
 ):
     service = AdminService(db)
-    tenants = await service.tenant_repo.get_multi(skip=skip, limit=limit)
+    tenants = await service.list_tenants(skip, limit)
     return tenants
 
 
@@ -51,12 +52,11 @@ async def list_tenants(
 async def block_tenant(
         tenant_id: UUID,
         request: TenantBlockRequest,
-        db: AsyncSession = Depends(get_db),
+        service: AdminService = Depends(get_admin_service),
         user: User = Depends(require_superadmin)
 ):
     service = AdminService(db)
     await service.block_tenant(tenant_id, request.reason)
-    await db.commit()
     return {"status": "blocked", "tenant_id": str(tenant_id)}
 
 
@@ -68,10 +68,9 @@ async def search_lines(
         tenant_id: Optional[UUID] = None,
         skip: int = Query(0),
         limit: int = Query(50),
-        db: AsyncSession = Depends(get_db),
+        service: AdminService = Depends(get_admin_service),
         user: User = Depends(require_superadmin)
 ):
-    service = AdminService(db)
     filters = {}
     if status: filters["status"] = status
     if channel_type: filters["channel_type"] = channel_type
@@ -105,12 +104,12 @@ async def list_instances(
         status: Optional[str] = None,
         skip: int = Query(0),
         limit: int = Query(50),
-        db: AsyncSession = Depends(get_db),
+        service: AdminService = Depends(get_admin_service),
         user: User = Depends(require_superadmin)
 ):
     service = AdminService(db)
     filters = {"status": status} if status else {}
-    instances = await service.instance_repo.get_multi(skip=skip, limit=limit, filters=filters)
+    instances = await service.list_instances(skip, limit, filters)
     return instances
 
 
@@ -118,12 +117,11 @@ async def list_instances(
 async def clean_instance(
         instance_id: UUID,
         request: InstanceCleanRequest,
-        db: AsyncSession = Depends(get_db),
+        service: AdminService = Depends(get_admin_service),
         user: User = Depends(require_superadmin)
 ):
     service = AdminService(db)
     await service.clean_instance(instance_id, force=request.force)
-    await db.commit()
     return {"status": "cleaned", "instance_id": str(instance_id)}
 
 
@@ -132,9 +130,9 @@ async def clean_instance(
 async def manual_balance_adjustment(
         request: BalanceAdjustmentRequest,
         db: AsyncSession = Depends(get_db),
-        user: User = Depends(require_superadmin)
+        user: User = Depends(require_superadmin),
+        service: AdminService = Depends(get_admin_service)
 ):
-    service = AdminService(db)
     try:
         entry = await service.adjust_balance(
             tenant_id=request.tenant_id,
@@ -143,7 +141,6 @@ async def manual_balance_adjustment(
             description=request.description,
             reference_id=request.reference_id
         )
-        await db.commit()
         return LedgerEntryResponse.model_validate(entry)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -154,15 +151,9 @@ async def get_tenant_ledger(
         tenant_id: UUID,
         skip: int = Query(0),
         limit: int = Query(50),
-        db: AsyncSession = Depends(get_db),
+        service: AdminService = Depends(get_admin_service),
         user: User = Depends(require_superadmin)
 ):
     service = AdminService(db)
-    entries = await service.billing_repo.get_multi(
-        skip=skip,
-        limit=limit,
-        filters={"tenant_id": tenant_id}
-        # В base.repo нужно убедиться, что сортировка по created_at desc работает, 
-        # либо добавить явный order_by здесь через session
-    )
+    entries = await service.get_tenant_ledger(tenant_id, skip, limit)
     return entries

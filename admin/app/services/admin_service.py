@@ -29,6 +29,9 @@ class AdminService:
         await self.tenant_repo.block_tenant(tenant_id, reason)
         # TODO: Добавить логирование в Audit Log
 
+    async def list_tenants(self, skip: int, limit: int):
+        return await self.tenant_repo.get_multi(skip=skip, limit=limit)
+
     # --- Lines ---
     async def get_lines_global(self, skip: int, limit: int, filters: dict) -> List[Tuple[Line, str]]:
         return await self.line_repo.get_lines_with_tenant_names(skip, limit, filters)
@@ -60,6 +63,14 @@ class AdminService:
         await self.instance_repo.release_instance(instance_id)
         # TODO: Вызов внешней логики очистки сессии (GreenAPI/WABA)
 
+    async def list_instances(
+            self, skip: int, limit: int, filters: dict
+    ):
+        return await self.instance_repo.get_multi(
+            skip=skip, limit=limit, filters=filters
+        )
+
+
     # --- Billing ---
     async def adjust_balance(
             self,
@@ -82,4 +93,13 @@ class AdminService:
             balance_type=balance_type,
             description=description,
             reference_id=reference_id
+        )
+
+    async def get_tenant_ledger(
+            self, tenant_id: UUID, skip: int, limit: int
+    ):
+        return await self.billing_repo.get_multi(
+            skip=skip,
+            limit=limit,
+            filters={"tenant_id": tenant_id},
         )

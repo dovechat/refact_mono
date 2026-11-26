@@ -16,7 +16,9 @@ from app.repositories.billing_repo import (
     PaymentRepository,
     TariffRepository
 )
+from app.services.admin_service import AdminService
 from app.services.billing_service import AdminBillingService
+
 
 bearer_scheme = HTTPBearer()
 
@@ -49,6 +51,10 @@ async def get_billing_service(
     return AdminBillingService(uow)
 
 
+async def get_admin_service(
+    db: AsyncSession = Depends(get_db),
+) -> AdminService:
+    return AdminService(db)
 
 
 async def get_current_admin(
