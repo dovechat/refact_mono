@@ -969,7 +969,6 @@ class ChatService:
         updated = await self.conv_repo.set_conversation_closed(conversation_id, is_closed)
         await self.db.commit()
         await rdb.delete(f"conv:{conversation_id}")
-        await self.db.commit()
         return updated
 
     async def save_crm_incoming(self, data: CrmMessageIn):

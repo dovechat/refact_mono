@@ -5,14 +5,15 @@ import uuid
 from datetime import datetime
 
 from kafka import send_event
-from sqlalchemy import select, and_
 from telethon import events
 
 from core.config import settings
-from core.database import AsyncSessionLocal
+from core.database import get_db
 from infra.crypto import decrypt
 from models.lines import ChannelAccount, Line, ChannelType, ConnectionStatus, LineStatus
 from repo.conversation_repo import ConversationRepository
+from repo.line_repo import ChannelAccountRepository
+from contextlib import asynccontextmanager
 from messages import (
     serialize_message,
     serialize_edited_message,
@@ -24,6 +25,7 @@ from tg_client import TelegramClientWrapper
 logging.getLogger('telethon').setLevel(logging.DEBUG)
 log = logging.getLogger("uvicorn.error")
 
+get_session = asynccontextmanager(get_db)
 
 from core.redis import rdb
 from repo.conversation_repo import ConversationRepository
@@ -37,7 +39,7 @@ async def get_known_peers(line_id: str) -> set[str]:
     if cached:
         return {p.decode() if isinstance(p, bytes) else p for p in cached}
 
-    async with AsyncSessionLocal() as session:
+    async with get_session() as session:
         repo = ConversationRepository(session)
         conversations = await repo.get_multi(
             filters={"line_id": line_id, "channel_type": "telegram_user"},
@@ -61,45 +63,45 @@ class ChannelConnection:
         self._album_tasks: dict[str, asyncio.Task] = {}
 
     async def _load_session_string(self) -> str:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(ChannelAccount).where(
-                    and_(
-                        ChannelAccount.line_id == uuid.UUID(self.line_id),
-                        ChannelAccount.channel_type == ChannelType.telegram_user,
-                    )
-                )
+        async with get_session() as db:
+            account = await ChannelAccountRepository(
+                db
+            ).get_by_line_and_type(
+                uuid.UUID(self.line_id), ChannelType.telegram_user
             )
-            account = result.scalar_one_or_none()
             if not account:
-                raise ValueError(f"No channel_account for line {self.line_id}")
-            creds = json.loads(decrypt(account.credentials_encrypted["encrypted_data"]))
+                raise ValueError(
+                    f"No channel_account for line {self.line_id}"
+                )
+            creds = json.loads(
+                decrypt(account.credentials_encrypted["encrypted_data"])
+            )
             log.info(f"\n\n ---- creds {creds} \n\n")
             return creds["session_string"]
 
     async def _get_peer_phone(self) -> str:
-        async with AsyncSessionLocal() as db:
+        async with get_session() as db:
             conv = await ConversationRepository(db).get_by_line_and_crm(
                 uuid.UUID(self.line_id), "telegram_user"
             )
             self._peer_phone_cache = conv.client_phone if conv else ""
         return self._peer_phone_cache
 
-    async def _set_status(self, status: ConnectionStatus, error: str | None = None):
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(ChannelAccount).where(
-                    and_(
-                        ChannelAccount.line_id == uuid.UUID(self.line_id),
-                        ChannelAccount.channel_type == ChannelType.telegram_user,
-                    )
-                )
+    async def _set_status(
+        self, status: ConnectionStatus, error: str | None = None
+    ):
+        async with get_session() as db:
+            repo = ChannelAccountRepository(db)
+            account = await repo.get_by_line_and_type(
+                uuid.UUID(self.line_id), ChannelType.telegram_user
             )
-            account = result.scalar_one_or_none()
             if account:
-                account.connection_status = status
-                account.connection_error = error
-                account.last_checked_at = datetime.utcnow()
+                await repo.update(
+                    account,
+                    connection_status=status,
+                    connection_error=error,
+                    last_checked_at=datetime.utcnow(),
+                )
 
     async def connect(self):
         session_string = await self._load_session_string()
@@ -236,20 +238,24 @@ class ConnectionPool:
         self._lock = asyncio.Lock()
 
     async def _eligible_line_ids(self) -> list[tuple[str, str]]:
-        """Активные (не disabled/expired) telegram_user каналы, не отключённые вручную."""
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(ChannelAccount.line_id, ChannelAccount.phone)
-                .join(Line, Line.id == ChannelAccount.line_id)
-                .where(
-                    ChannelAccount.channel_type == ChannelType.telegram_user,
-                    ChannelAccount.connection_status != ConnectionStatus.disconnected,
-                    Line.status == LineStatus.active,
-                )
+        """Активные (не disabled/expired) telegram_user каналы,
+        не отключённые вручную."""
+        async with get_session() as db:
+            accounts = await ChannelAccountRepository(db).get_multi(
+                limit=10000,
+                join_model=Line,
+                filters={
+                    "channel_type": ChannelType.telegram_user,
+                    "status": LineStatus.active,
+                    "connection_status": [
+                        ConnectionStatus.connected,
+                        ConnectionStatus.error,
+                        ConnectionStatus.blocked,
+                    ],
+                },
             )
-            rows = result.all()
-            log.info(f"[pool] eligible rows raw: {rows}")
-            return [(str(row[0]), row[1] or "") for row in rows]
+            log.info(f"[pool] eligible accounts: {len(accounts)}")
+            return [(str(a.line_id), a.phone or "") for a in accounts]
 
     def get_client(self, line_id: str) -> TelegramClientWrapper | None:
         conn = self.connections.get(str(line_id))
@@ -271,7 +277,7 @@ class ConnectionPool:
                     return "starting"
 
             conversation_id = None
-            async with AsyncSessionLocal() as db:
+            async with get_session() as db:
                 conv_repo = ConversationRepository(db)
                 conversations = await conv_repo.get_multi(
                     filters={
