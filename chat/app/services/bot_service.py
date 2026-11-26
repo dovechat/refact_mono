@@ -11,8 +11,7 @@ from core.crm_contract import normalize_crm_send_result
 from app.core.crm_flag import crm_enabled
 from core.metrics import webhook_processing_seconds, webhook_errors_total
 from infra.utils import decrypt_credentials
-from models.lines import Line
-from repo.line_repo import ChannelAccountRepository
+from repo.line_repo import ChannelAccountRepository, LineRepository
 from repo.membership_repo import MembershipRepository
 from repo.message_repo import MediaRepository
 from services.storage_service import StorageService
@@ -24,6 +23,7 @@ class BotService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.channel_repo = ChannelAccountRepository(db)
+        self.line_repo = LineRepository(db)
         self.conv_repo = ChatRepository(db)
         self.msg_repo = MessageRepository(db)
         self.media_repo = MediaRepository(db)
@@ -56,7 +56,6 @@ class BotService:
 
         db_message = messages[0]
         await self.msg_repo.update(db_message, text=text)
-        await self.db.commit()
 
         await websocket_manager.manager.send_message_update(str(conversation.id), {
             "type": "edit",
@@ -90,7 +89,7 @@ class BotService:
         # prometheus wrap
         try:
             with webhook_processing_seconds.labels(channel_type="telegram_bot", event_type="message").time():
-                line = await self.db.get(Line, line_id)
+                line = await self.line_repo.get_by_id(line_id)
                 if not line:
                     log.error(f"Line {line_id} not found")
                     return {"ok": False}
@@ -162,7 +161,7 @@ class BotService:
                 if media_id:
                     await self.media_repo.create(message_id=db_message.id, id=media_id, file_name=file_name,
                                                  mime_type=mime_type)
-                    await self.db.flush()
+
                 log.info(f"db_message {db_message.id}")
         
                 # 8. Send to WebSocket

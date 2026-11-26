@@ -1,6 +1,7 @@
 import uuid
 from typing import List, Optional
 from sqlalchemy import desc, func, and_, select
+from sqlalchemy.orm import selectinload
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.lines import ChannelAccount, Line
@@ -327,3 +328,12 @@ class ChatRepository(BaseRepository[Conversation]):
         )
         result = await self.session.execute(stmt)
         return result.all()
+
+    async def get_conversation_with_line(self, conversation_id: uuid.UUID) -> Conversation | None:
+        stmt = (
+            select(Conversation)
+            .where(Conversation.id == conversation_id)
+            .options(selectinload(Conversation.line))
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()

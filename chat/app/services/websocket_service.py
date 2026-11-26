@@ -1,14 +1,17 @@
 import uuid
 from typing import Dict, List
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from models.messages import Conversation, Message, MessageDirection, MessageStatus
-from models.lines import Line
+from models.messages import MessageDirection, MessageStatus
+from app.repositories.chat_repo import ChatRepository
+from app.repositories.message_repo import MessageRepository
 
 
 class WebSocketService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.chat_repo = ChatRepository(db)
+        self.msg_repo = MessageRepository(db)
         self.subscriptions: Dict[uuid.UUID, List[uuid.UUID]] = {}  # conversation_id -> [user_id]
 
     async def subscribe_to_conversation(
@@ -18,13 +21,7 @@ class WebSocketService:
             user_id: uuid.UUID
     ):
         """Subscribe user to conversation updates"""
-        # Verify conversation belongs to tenant
-        stmt = select(Conversation).join(Line).where(
-            Conversation.id == conversation_id,
-            Line.tenant_id == tenant_id
-        )
-        result = await self.db.execute(stmt)
-        conversation = result.scalar_one_or_none()
+        conversation = await self.chat_repo.get_conversation_for_tenant(conversation_id, tenant_id)
 
         if not conversation:
             raise ValueError("Conversation not found or access denied")
@@ -43,38 +40,20 @@ class WebSocketService:
             message: dict
     ) -> dict:
         """Save incoming WebSocket message to database"""
-        # Verify conversation belongs to tenant
-        stmt = select(Conversation).join(Line).where(
-            Conversation.id == conversation_id,
-            Line.tenant_id == tenant_id
-        )
-        result = await self.db.execute(stmt)
-        conversation = result.scalar_one_or_none()
+        conversation = await self.chat_repo.get_conversation_for_tenant(conversation_id, tenant_id)
 
         if not conversation:
             raise ValueError("Conversation not found or access denied")
 
         # Create message record
-        new_message = Message(
+        new_message = await self.msg_repo.create(
             conversation_id=conversation_id,
             direction=MessageDirection.outbound,
             status=MessageStatus.sent,
             text=message.get("text"),
             raw_content=message
         )
-
-        self.db.add(new_message)
-        await self.db.commit()
-        await self.db.refresh(new_message)
-
-        # Update conversation updated_at
-        from sqlalchemy import update
-        from datetime import datetime, timezone
-        update_stmt = update(Conversation).where(
-            Conversation.id == conversation_id
-        ).values(updated_at=datetime.now(timezone.utc))
-        await self.db.execute(update_stmt)
-        await self.db.commit()
+        await self.chat_repo.update(conversation, updated_at=datetime.now(timezone.utc))
 
         return {
             "id": new_message.id,

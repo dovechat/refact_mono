@@ -3,13 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import WebSocket
 from typing import Dict, List
 import uuid
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
 from core.database import get_db
 from core.redis import rdb
-from models.messages import Conversation
 from repo.user import UserRepository
+from app.repositories.chat_repo import ChatRepository
 from app.repositories.permission_repo import PermissionRepository
 
 import logging
@@ -53,10 +50,7 @@ class ConnectionManager:
         # Проверка доступа
         async with get_session() as db:
             # Загружаем conversation вместе с линией
-            stmt = select(Conversation).where(Conversation.id == conv_uuid).options(
-                selectinload(Conversation.line))
-            result = await db.execute(stmt)
-            conv = result.scalar_one_or_none()
+            conv = await ChatRepository(db).get_conversation_with_line(conv_uuid)
 
             if not conv:
                 await websocket.close(code=1008, reason="Conversation not found")
