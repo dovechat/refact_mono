@@ -3,8 +3,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.dependencies import get_auth_service, get_current_user, get_db
-from schemas.auth_schemas import LoginRequest, RegisterRequest, SetPasswordRequest, TokenPair, UserContext as User
+from core.dependencies import get_auth_service, get_current_user, get_db, UserContext as User
+from schemas.auth_schemas import (
+    InviteAcceptRequest,
+    LoginRequest, RegisterRequest,
+    SetPasswordRequest,
+    TokenPair,
+    UserContext as User,
+)
 from services.auth_service import AuthService
 
 
@@ -24,6 +30,16 @@ async def register(
         data=data,
         db=db,
     )
+
+
+@public_router.post("/invite/accept", response_model=TokenPair)
+async def accept_invite(
+    data: InviteAcceptRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db),
+) -> TokenPair:
+    """Принять приглашение сотрудника по ссылке из письма"""
+    return await auth_service.accept_invite(data.token, data.password, db)
 
 
 @public_router.post("/login", response_model=TokenPair)

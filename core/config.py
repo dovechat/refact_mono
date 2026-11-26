@@ -39,7 +39,9 @@ class Settings(BaseSettings):
 
     # Service-to-service auth for /internal/* endpoints (chat <-> crm)
     internal_api_token: str = ""
-    access_token_expire_minutes: int = 1440
+    access_token_expire_minutes: int = 1440  # на проде задать через env ACCESS_TOKEN_EXPIRE_MINUTES
+    invite_token_expire_hours: int = 72
+    invite_url: str = "https://tg.dove-chat.pro/dev/lc/invite"
     refresh_token_expire_days: int = 7
 
     # API

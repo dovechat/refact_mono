@@ -110,13 +110,21 @@ class SetPasswordRequest(BaseModel):
     password: str
 
 
+class InviteAcceptRequest(BaseModel):
+    """Принять приглашение: токен из ссылки и новый пароль"""
+    token: str
+    password: str = Field(..., min_length=8)
+
+
 class RegisterDB(RegisterBase):
     """Registration data for insert into database"""
     password_hash: str | None = None
 
+
 class UpdateMeRequest(BaseModel):
     full_name: str | None = None
     phone: str | None = None
+
 
 class ChangePasswordRequest(BaseModel):
     password: str

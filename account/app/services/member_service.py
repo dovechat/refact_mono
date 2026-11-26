@@ -1,6 +1,7 @@
 # app/services/member_service.py
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from urllib.parse import urlencode
 from uuid import UUID
 from typing import List, Optional
 import logging
@@ -15,7 +16,10 @@ from app.schemas.member_schemas import (
     LinePermissionCreate,
     LinePermissionResponse
 )
+from core.config import settings
+from core.revocation import revoke_access
 from infra.email.sender import ManagerSender
+from services.auth_service import create_invite_token
 from models.tenants import Membership, ResourcePermission, User
 
 log = logging.getLogger(__name__)
@@ -31,19 +35,15 @@ class MemberService:
 
     async def _create_user_and_send_invite(self, email: str) -> User:
         """Создать пользователя и отправить приглашение"""
-        import secrets
-        from core.security import get_password_hash
-
-        plain_password = secrets.token_urlsafe(12)
-        hashed_password = get_password_hash(plain_password)
-
         user = await self.user_repo.create(
             email=email,
-            password_hash=hashed_password,
-            status="active"
+            password_hash=None,
+            status="inactive"
         )
 
-        ManagerSender().send(email, plain_password)
+        token = await create_invite_token(user.id)
+        link = f"{settings.invite_url}?{urlencode({'token': token})}"
+        ManagerSender().send(email, link)
         return user
 
     async def add_member(self, tenant_id: UUID, data: MemberCreate) -> MemberResponse:
@@ -93,6 +93,7 @@ class MemberService:
             raise ValueError("Owner can't be removed")
 
         await self.member_repo.delete(member)
+        await revoke_access(user_id, tenant_id)
 
     async def add_line_permission(self, tenant_id: UUID, data: LinePermissionCreate) -> LinePermissionResponse:
         """Выдать доступ к линии"""

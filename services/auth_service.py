@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import secrets
 import uuid
@@ -6,6 +7,7 @@ import bcrypt
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from core.redis import rdb
 from infra.email.sender import OTPSender
 from infra.sms.sender import SMSSender
@@ -25,6 +27,22 @@ LOGIN_FAIL_TTL = 900
 OTP_TTL = 600
 OTP_MAX_ATTEMPTS = 10
 _DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode("utf-8")
+
+
+
+def _invite_key(token: str) -> str:
+    return f"invite:{hashlib.sha256(token.encode()).hexdigest()}"
+
+
+async def create_invite_token(user_id: uuid.UUID | str) -> str:
+    """Одноразовый токен приглашения. В Redis хранится только его хеш."""
+    token = secrets.token_urlsafe(32)
+    await rdb.setex(
+        _invite_key(token),
+        settings.invite_token_expire_hours * 3600,
+        str(user_id),
+    )
+    return token
 
 
 async def is_throttled(key: str, seconds: int) -> bool:
@@ -137,17 +155,59 @@ class AuthService:
             role="owner",
         )
 
-    async def refresh(self, refresh_token: str) -> TokenPair:
+    async def refresh(self, refresh_token: str, db: AsyncSession) -> TokenPair:
         payload = self.jwt_service.verify_token(refresh_token, token_type=TokenType.REFRESH)
 
         if await is_throttled(f"refresh:{payload.sub}", 5):
             raise HTTPException(status_code=429, detail="Too many requests")
 
-        return self.jwt_service.create_token_pair(
-            user_id=payload.sub,
-            role=payload.role,
-            tenant_id=payload.tenant_id
+        # Права перечитываются из БД: удалённый сотрудник или заблокированный пользователь не продлит доступ
+        credentials_exception = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
         )
+        user_repo = UserRepository(db)
+        user = await user_repo.get_by_id(payload.sub)
+        if not user or user.status == UserStatus.suspended:
+            raise credentials_exception
+
+        member = None
+        if payload.tenant_id:
+            membership = await user_repo.get_membership(
+                user.id, uuid.UUID(str(payload.tenant_id))
+            )
+            if not membership:
+                raise credentials_exception
+            member = membership.role
+
+        return self.jwt_service.create_token_pair(
+            user_id=user.id,
+            role=user.role,
+            tenant_id=payload.tenant_id,
+            member=member,
+        )
+
+    async def accept_invite(self, token: str, password: str, db: AsyncSession) -> TokenPair:
+        """Принять приглашение: токен одноразовый, пароль задаёт сам сотрудник"""
+        invalid = HTTPException(status_code=400, detail="Invalid or expired invite")
+
+        user_id = await rdb.getdel(_invite_key(token))
+        if not user_id:
+            raise invalid
+
+        user_repo = UserRepository(db)
+        user = await user_repo.get_by_id(user_id)
+        if not user:
+            raise invalid
+
+        await user_repo.update(
+            user,
+            password_hash=self.jwt_service.password_hash(password),
+            status=UserStatus.active,
+        )
+        await rdb.delete(f"user:{user_id}")
+
+        return self.jwt_service.create_token_pair(user_id=user.id, role=user.role)
 
     async def verify_code(self, user_id: str, code: str, db: AsyncSession) -> str:
         lock_key = f"activated_lock:{user_id}"

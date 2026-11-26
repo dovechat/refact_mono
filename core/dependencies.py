@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from core.database import get_db, get_db_read, get_db_write
 from core.redis import rdb
+from core.revocation import is_revoked
 from core.security import ALGORITHMS, SECRET_KEY
 # from app.repositories.contact import ContactRepository
 from repo.user import UserRepository
@@ -65,6 +66,9 @@ async def get_current_user(
         raise credentials_exception
 
     if token_data.type != "access":
+        raise credentials_exception
+
+    if await is_revoked(token_data.sub, token_data.tenant_id, token_data.iat):
         raise credentials_exception
 
     cache_key = f"user:{token_data.sub}"

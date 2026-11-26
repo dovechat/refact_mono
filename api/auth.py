@@ -39,9 +39,10 @@ async def register(
 @public_router.post("/refresh", response_model=TokenPair)
 async def refresh_token(
     refresh_token: str = Body(..., embed=True),
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db),
 ):
-    return await auth_service.refresh(refresh_token)
+    return await auth_service.refresh(refresh_token, db)
 
 
 @public_router.post("/login", response_model=TokenPair)
