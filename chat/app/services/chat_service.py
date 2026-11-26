@@ -151,7 +151,6 @@ class ChatService:
                         "ChatService._process_queue_outgoing "
                         f"media create failed e={e}\n\n"
                     )
-            await self.db.commit()
             await self.db.refresh(message, attribute_names=["media"])
 
         await manager.send_new_message(str(data.conversation_id), {

@@ -829,7 +829,7 @@ class TestChatService:
 
 # --- _process_queue_outgoing с media ---
     @pytest.mark.asyncio
-    async def test_process_queue_outgoing_with_media_commits_and_refreshes(self, chat_service, test_conversation, current_user):
+    async def test_process_queue_outgoing_with_media_refreshes(self, chat_service, test_conversation, current_user):
         message = MagicMock()
         message.id = 1
         message.conversation_id = test_conversation.id
@@ -851,7 +851,6 @@ class TestChatService:
         chat_service.msg_repo.get_by_id = AsyncMock(return_value=message)
         chat_service.conv_repo.get_by_id = AsyncMock(return_value=test_conversation)
         chat_service.media_repo.create = AsyncMock()
-        chat_service.db.commit = AsyncMock()
         chat_service.db.refresh = AsyncMock()
         chat_service._finalize_message = AsyncMock()
 
@@ -866,7 +865,6 @@ class TestChatService:
             await chat_service._process_queue_outgoing("vk", data, current_user)
 
         chat_service.media_repo.create.assert_called_once()
-        chat_service.db.commit.assert_called_once()
         chat_service.db.refresh.assert_called_once_with(message, attribute_names=["media"])
 
     @pytest.mark.asyncio
