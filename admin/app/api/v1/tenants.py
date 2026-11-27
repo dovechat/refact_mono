@@ -3,8 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.dependencies import AdminUser
-from app.core.uow import AdminUnitOfWork
+from app.core.dependencies import AdminUser, get_tenant_service
 from app.schemas.admin_schemas import (
     TenantListResponse,
     TenantOut,
@@ -13,19 +12,14 @@ from app.schemas.admin_schemas import (
     UpdateTenantRequest,
 )
 from app.services.tenant_service import AdminTenantService
-from core.dependencies import get_db
+
 
 router = APIRouter(prefix="/tenants", tags=["Admin — Tenants"])
-
-
-def get_service(session=Depends(get_db)) -> AdminTenantService:
-    return AdminTenantService(AdminUnitOfWork(session))
-
 
 @router.get("", response_model=TenantListResponse)
 async def list_tenants(
     admin: AdminUser,
-    svc: AdminTenantService = Depends(get_service),
+    svc: AdminTenantService = Depends(get_tenant_service),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     name: str | None = Query(None),
@@ -45,7 +39,7 @@ async def list_tenants(
 async def get_tenant(
     tenant_id: uuid.UUID,
     admin: AdminUser,
-    svc: AdminTenantService = Depends(get_service),
+    svc: AdminTenantService = Depends(get_tenant_service),
 ):
     return await svc.get_tenant(tenant_id, actor_id=uuid.UUID(admin["sub"]))
 
@@ -55,7 +49,7 @@ async def set_tenant_status(
     tenant_id: uuid.UUID,
     body: SetTenantStatusRequest,
     admin: AdminUser,
-    svc: AdminTenantService = Depends(get_service),
+    svc: AdminTenantService = Depends(get_tenant_service),
 ):
     return await svc.set_tenant_status(tenant_id, body, actor_id=uuid.UUID(admin["sub"]))
 
@@ -65,6 +59,6 @@ async def update_tenant(
     tenant_id: uuid.UUID,
     body: UpdateTenantRequest,
     admin: AdminUser,
-    svc: AdminTenantService = Depends(get_service),
+    svc: AdminTenantService = Depends(get_tenant_service),
 ):
     return await svc.update_tenant(tenant_id, body, actor_id=uuid.UUID(admin["sub"]))

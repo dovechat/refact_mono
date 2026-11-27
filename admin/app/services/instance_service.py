@@ -70,10 +70,7 @@ class AdminInstanceService:
             resource_type="instance",
             resource_id=instance_id,
         )
-        await self._uow.commit()
         return InstanceOut.model_validate(instance)
-
-
 
     async def create_instance(
         self,
@@ -104,7 +101,6 @@ class AdminInstanceService:
             resource_id=instance.id,
             details={"provider": request.provider, "external_id": request.external_id},
         )
-        await self._uow.commit()
 
         log.info(f"Admin {actor_id}: created instance {instance.id} ({request.provider}/{request.external_id})")
         return InstanceOut.model_validate(instance)
@@ -126,13 +122,13 @@ class AdminInstanceService:
         old_line_id = instance.allocated_to_line_id
 
         if old_line_id:
-            channel_account_repo = ChannelAccountRepository(self._uow._session)
+            channel_account_repo = ChannelAccountRepository(self._uow.session)
             channels = await channel_account_repo.get_by_line(old_line_id)
             cleanup = CleanupService(
-                conversation_repo=ConversationRepository(self._uow._session),
-                message_repo=MessageRepository(self._uow._session),
+                conversation_repo=ConversationRepository(self._uow.session),
+                message_repo=MessageRepository(self._uow.session),
                 channel_account_repo=channel_account_repo,
-                instance_repo=MonoInstanceRepository(self._uow._session),
+                instance_repo=MonoInstanceRepository(self._uow.session),
             )
             log.info(f"clean_instance channels for line {old_line_id}: {[(ch.channel_type.value) for ch in channels]}")
             for ch in channels:
@@ -151,7 +147,6 @@ class AdminInstanceService:
             resource_id=instance_id,
             details={"was_allocated_to": str(old_line_id) if old_line_id else None},
         )
-        await self._uow.commit()
 
         log.info(f"Admin {actor_id}: cleaned instance {instance_id} (was on line {old_line_id})")
         return MessageResponse(message="Instance cleaned and returned to pool")
@@ -179,8 +174,6 @@ class AdminInstanceService:
             )
             cleaned += 1
 
-        await self._uow.commit()
-
         log.info(f"Admin {actor_id}: bulk clean — {cleaned} instances cleaned, {len(errors)} not found")
         msg = f"Cleaned {cleaned} instances"
         if errors:
@@ -206,7 +199,6 @@ class AdminInstanceService:
             details={"external_id": instance.external_id, "provider": instance.provider},
         )
         await self._uow.instances.delete(instance)
-        await self._uow.commit()
 
         log.info(f"Admin {actor_id}: deleted instance {instance_id}")
         return MessageResponse(message="Instance deleted")
@@ -230,7 +222,6 @@ class AdminInstanceService:
                 "new_line_id": str(line_id),
             },
         )
-        await self._uow.commit()
     
         log.info(f"Admin {actor_id}: reallocated instance {instance_id} from line {old_line_id} to {line_id}")
         return MessageResponse(message="Instance reallocated")

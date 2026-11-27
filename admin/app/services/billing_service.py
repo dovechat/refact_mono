@@ -115,7 +115,6 @@ class AdminBillingService:
                 user = await self._uow.users.get_by_id(m.user_id)
                 if user and user.status == "trial":
                     await self._uow.users.update(user, status="active")
-        await self._uow.commit()
 
         log.info(
             f"Admin {actor_id}: adjustment {request.amount} ({request.balance_type}) "
@@ -198,5 +197,3 @@ class AdminBillingService:
             resource_id=tariff_id,
             details={"tariff_id": str(tariff_id)},
         )
-
-        await self._uow.commit()

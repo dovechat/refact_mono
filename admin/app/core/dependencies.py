@@ -16,7 +16,6 @@ from app.repositories.billing_repo import (
     PaymentRepository,
     TariffRepository
 )
-from app.services.admin_service import AdminService
 from app.services.billing_service import AdminBillingService
 from app.services.instance_service import AdminInstanceService
 from app.services.line_service import AdminLineService
@@ -69,6 +68,10 @@ async def get_tenant_service(
 ) -> AdminTenantService:
     return AdminTenantService(uow)
 
+async def get_instance_service(
+    uow: AdminUnitOfWork = Depends(get_uow),
+) -> AdminInstanceService:
+    return AdminInstanceService(uow)
 
 async def get_stats_service(
     uow: AdminUnitOfWork = Depends(get_uow),

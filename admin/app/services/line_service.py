@@ -97,7 +97,6 @@ class AdminLineService:
             resource_id=line_id,
             details={"old_status": old_status, "new_status": request.status.value},
         )
-        await self._uow.commit()
 
         log.info(f"Admin {actor_id}: line {line_id} status {old_status} → {request.status.value}")
         return MessageResponse(message=f"Line status updated to {request.status.value}")
@@ -131,7 +130,6 @@ class AdminLineService:
             resource_id=line_id,
             details={"days": request.days, "new_expires_at": new_expires.isoformat()},
         )
-        await self._uow.commit()
 
         log.info(f"Admin {actor_id}: line {line_id} extended by {request.days}d, new expires {new_expires}")
         return MessageResponse(message=f"Line extended until {new_expires.date()}")

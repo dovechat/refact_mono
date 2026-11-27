@@ -15,6 +15,7 @@ from app.schemas.admin_schemas import (
 )
 from app.services.instance_service import AdminInstanceService
 
+
 router = APIRouter(prefix="/instances", tags=["Admin — Instances"])
 
 

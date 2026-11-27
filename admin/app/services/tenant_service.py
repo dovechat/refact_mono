@@ -74,7 +74,6 @@ class AdminTenantService:
             resource_id=user_id,
             details={"old_status": old_status.value if hasattr(old_status, 'value') else old_status, "new_status": request.status.value},
         )
-        await self._uow.commit()
 
         log.info(f"Admin {actor_id}: user {user_id} status changed {old_status} → {request.status.value}")
         return MessageResponse(message=f"User status updated to {request.status.value}")
@@ -98,7 +97,6 @@ class AdminTenantService:
             resource_type="user",
             resource_id=user_id,
         )
-        await self._uow.commit()
 
         log.info(f"Admin {actor_id}: password reset for user {user_id}")
         return MessageResponse(message="Password reset successfully")
@@ -187,5 +185,4 @@ class AdminTenantService:
             resource_id=tenant_id,
             details=data,
         )
-        await self._uow.commit()
         return TenantOut.model_validate(tenant)

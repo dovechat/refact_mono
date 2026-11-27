@@ -29,6 +29,10 @@ class AdminUnitOfWork:
         self.memberships = MembershipRepository(session)
         self.tariff = TariffRepository(session)
 
+    @property
+    def session(self) -> AsyncSession:
+        return self._session
+
     async def commit(self) -> None:
         await self._session.commit()
 
