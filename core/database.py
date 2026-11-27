@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
@@ -40,6 +41,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise  # !!!
         finally:
             await session.close()
+
+get_session = asynccontextmanager(get_db)
 
 async def get_db_read() -> AsyncGenerator[AsyncSession, None]:
     """Dependency to get read-only DB session."""

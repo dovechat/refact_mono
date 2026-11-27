@@ -8,12 +8,12 @@ from kafka import send_event
 from telethon import events
 
 from core.config import settings
-from core.database import get_db
+from core.database import get_session
+from core.redis import rdb
 from infra.crypto import decrypt
 from models.lines import ChannelAccount, Line, ChannelType, ConnectionStatus, LineStatus
 from repo.conversation_repo import ConversationRepository
 from repo.line_repo import ChannelAccountRepository
-from contextlib import asynccontextmanager
 from messages import (
     serialize_message,
     serialize_edited_message,
@@ -25,11 +25,6 @@ from tg_client import TelegramClientWrapper
 logging.getLogger('telethon').setLevel(logging.DEBUG)
 log = logging.getLogger("uvicorn.error")
 
-get_session = asynccontextmanager(get_db)
-
-from core.redis import rdb
-from repo.conversation_repo import ConversationRepository
-from core.database import AsyncSessionLocal
 
 CACHE_TTL = 300
 

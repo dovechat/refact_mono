@@ -3,18 +3,17 @@ import json
 import asyncio
 import logging
 import uuid
-from contextlib import asynccontextmanager
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from core.config import settings
-from core.database import get_db
+from core.database import get_session
 from app.services.chat_service import ChatService
 from app.schemas.chat_schemas import MessageCreate, MessageDirection, MessageStatus
 from schemas.auth_schemas import UserContext
 from app.core.crm_flag import crm_enabled
 from app.core.log_filter import install_log_masking
 
+
 log = logging.getLogger(__name__)
-get_session = asynccontextmanager(get_db)
 
 DLT_TOPIC = "outgoing_dlt"
 INCOMING_DLT_TOPIC = "incoming_dlt"

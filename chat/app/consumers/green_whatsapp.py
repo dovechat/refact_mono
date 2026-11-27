@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 from core.config import settings
 from core.crm_contract import normalize_crm_send_result
-from core.database import get_db
+from core.database import get_session
 from app.repositories.message_repo import MessageRepository
 from repo.line_repo import ChannelAccountRepository
 from app.services.websocket_manager import manager
@@ -21,7 +21,6 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 log = logging.getLogger(__name__)
-get_session = asynccontextmanager(get_db)
 
 class GreenWhatsAppConnection:
     """Соединение с Green API для одной линии"""

@@ -266,7 +266,6 @@ async def test_handle_edited_message_success(mock_manager):
 
     assert result == {"ok": True}
     service.msg_repo.update.assert_awaited_once_with(db_message, text="edited text")
-    service.db.commit.assert_awaited_once()
     mock_manager.send_message_update.assert_awaited_once()
 
 

@@ -1,19 +1,16 @@
 import json
-from contextlib import asynccontextmanager
+import logging
 from fastapi import WebSocket
 from typing import Dict, List
 import uuid
-from core.database import get_db
+from core.database import get_session
 from core.redis import rdb
 from repo.user import UserRepository
 from app.repositories.chat_repo import ChatRepository
 from app.repositories.permission_repo import PermissionRepository
 
-import logging
 
 log = logging.getLogger(__name__)
-get_session = asynccontextmanager(get_db)
-
 
 class ConnectionManager:
     """Менеджер WS-соединений.

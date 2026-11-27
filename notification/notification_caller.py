@@ -1,15 +1,14 @@
 import uuid
 import logging
-from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import get_db
+from core.database import get_session
 from repo.line_repo import LineRepository
 from notification.notification_repo import NotificationSettingsRepository, NotificationLogRepository
 from notification.notification_service import NotificationService
 
+
 log = logging.getLogger(__name__)
-get_session = asynccontextmanager(get_db)
 
 # стало
 async def notify_connection_error(line_id: uuid.UUID, channel_type: str | None = None, db: AsyncSession | None = None):

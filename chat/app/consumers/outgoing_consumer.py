@@ -3,10 +3,9 @@ import os
 import asyncio
 import logging
 import uuid
-from contextlib import asynccontextmanager
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from core.config import settings
-from core.database import get_db
+from core.database import get_session
 from app.core.crm_flag import crm_enabled
 from app.core.log_filter import install_log_masking
 from app.services.chat_service import ChatService
@@ -15,7 +14,6 @@ from schemas.auth_schemas import UserContext
 
 
 log = logging.getLogger(__name__)
-get_session = asynccontextmanager(get_db)
 
 DLT_TOPIC = "outgoing_dlt"
 MAX_RETRIES = 5

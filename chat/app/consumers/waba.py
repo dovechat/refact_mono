@@ -3,12 +3,11 @@ import secrets
 import httpx
 import json
 import uuid
-from contextlib import asynccontextmanager
 from typing import Dict, TYPE_CHECKING
 from fastapi import HTTPException
 from core.config import settings
 from core.crm_contract import normalize_crm_send_result
-from core.database import get_db
+from core.database import get_session
 from core.metrics import webhook_processing_seconds, webhook_errors_total
 from core.redis import rdb
 from infra.crypto import decrypt
@@ -23,8 +22,8 @@ from app.core.crm_flag import crm_enabled
 if TYPE_CHECKING:  # pragma: no cover
     from app.services.chat_service import ChatService
 
+
 log = logging.getLogger(__name__)
-get_session = asynccontextmanager(get_db)
 
 # URL WABA API берём из настроек (по умолчанию — sandbox)
 WABA_API_URL = settings.waba_api_url

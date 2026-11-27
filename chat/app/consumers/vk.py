@@ -4,11 +4,10 @@ import json
 import uuid
 import random
 import secrets
-from contextlib import asynccontextmanager
 from typing import Dict, TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.crm_contract import normalize_crm_send_result
-from core.database import get_db
+from core.database import get_session
 from core.redis import rdb
 from infra.crypto import decrypt
 from notification.notification_caller import notify_connection_error
@@ -25,7 +24,6 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 log = logging.getLogger(__name__)
-get_session = asynccontextmanager(get_db)
 
 VK_API_URL = "https://api.vk.com/method"
 VK_API_VERSION = "5.199"
