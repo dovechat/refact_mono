@@ -3,8 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.dependencies import AdminUser, DBSession
-from app.core.uow import AdminUnitOfWork
+from app.core.dependencies import AdminUser, get_instance_service
 from app.schemas.admin_schemas import (
     BulkCleanRequest,
     CreateInstanceRequest,
@@ -17,11 +16,6 @@ from app.services.instance_service import AdminInstanceService
 
 
 router = APIRouter(prefix="/instances", tags=["Admin — Instances"])
-
-
-def get_instance_service(db: DBSession) -> AdminInstanceService:
-    return AdminInstanceService(AdminUnitOfWork(db))
-
 
 @router.get("", response_model=InstanceListResponse)
 async def list_instances(

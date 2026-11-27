@@ -165,7 +165,6 @@ class AdminTenantService:
                 "new_status": request.status.value,
             },
         )
-        await self._uow.commit()
 
         log.info(f"Admin {actor_id}: tenant {tenant_id} status {old_status} → {request.status.value}")
         return MessageResponse(message=f"Статус компании изменён на {request.status.value}")

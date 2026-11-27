@@ -85,12 +85,6 @@ async def get_audit_service(
     return AdminAuditService(uow)
 
 
-async def get_admin_service(
-    db: AsyncSession = Depends(get_db),
-) -> AdminService:
-    return AdminService(db)
-
-
 async def get_current_admin(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
