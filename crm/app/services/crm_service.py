@@ -1491,17 +1491,42 @@ class CrmService:
         )
         return result
 
-    async def disconnect_amo_line(self, line_id: uuid.UUID) -> None:
+    async def _require_tenant_line(
+        self, line_id: uuid.UUID, tenant_id: uuid.UUID
+    ):
+        line = await self._uow.lines.get_by_id(line_id)
+        if line is None or line.tenant_id != tenant_id:
+            raise HTTPException(status_code=404, detail="line not found")
+        return line
+
+    async def disconnect_amo_line(
+        self, line_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> None:
+        await self._require_tenant_line(line_id, tenant_id)
         conn = await self._uow.crm_line_connections.get_by_line(line_id)
         if conn:
             await self._uow.crm_line_connections.delete(conn)
 
-    async def list_amo_accounts(self) -> list:
+    async def list_amo_accounts(self, tenant_id: uuid.UUID) -> list:
         return await self._uow.crm_accounts.get_multi(
-            filters={"crm_type": "amocrm", "is_active": True},
+            filters={
+                "crm_type": "amocrm",
+                "is_active": True,
+                "tenant_id": tenant_id,
+            },
         )
 
-    async def connect_amo_line(self, body: AmoLineConnectRequest) -> dict:
+    async def connect_amo_line(
+        self, body: AmoLineConnectRequest, tenant_id: uuid.UUID
+    ) -> dict:
+        await self._require_tenant_line(body.line_id, tenant_id)
+        account = await self._uow.crm_accounts.get_by_id(
+            body.crm_account_id
+        )
+        if account is None or account.tenant_id != tenant_id:
+            raise HTTPException(
+                status_code=404, detail="account not found"
+            )
         existing = await self._uow.crm_line_connections.get_multi(
             filters={"line_id": body.line_id, "is_active": True}, limit=1
         )
@@ -1533,10 +1558,12 @@ class CrmService:
             links[0].conversation_id
         )
 
-    async def _link_lead_to_conversation(self, lead_id: str):
-        """Ищет диалог по телефону контакта сделки во всех аккаунтах Amo."""
+    async def _link_lead_to_conversation(
+        self, lead_id: str, tenant_id: uuid.UUID
+    ):
+        """Ищет диалог по телефону контакта сделки в аккаунтах Amo тенанта."""
         accounts = await self._uow.crm_accounts.get_multi(
-            filters={"crm_type": "amocrm"}
+            filters={"crm_type": "amocrm", "tenant_id": tenant_id}
         )
         for account in accounts:
             phone = await AmoCrmProvider(account).get_lead_contact_phone(
@@ -1561,21 +1588,19 @@ class CrmService:
             return convs[0]
         return None
 
-    async def get_conv_by_lead(self, lead_id: str) -> tuple[uuid.UUID, str]:
-        """Возвращает (id диалога, embed-токен) для сделки amoCRM.
-
-        TODO: ручка без авторизации выдаёт токен владельца тенанта;
-        нужно проверять токен вызывающего и тенант диалога.
-        """
+    async def get_conv_by_lead(
+        self, lead_id: str, tenant_id: uuid.UUID
+    ) -> tuple[uuid.UUID, str]:
+        """Возвращает (id диалога, embed-токен) для сделки amoCRM."""
         conversation = (
             await self._conversation_by_lead_link(lead_id)
-            or await self._link_lead_to_conversation(lead_id)
+            or await self._link_lead_to_conversation(lead_id, tenant_id)
         )
         if conversation is None:
             raise HTTPException(
                 status_code=404, detail="conversation not found for lead"
             )
-        line = await self._uow.lines.get_by_id(conversation.line_id)
-        if line is None:
-            raise HTTPException(status_code=404, detail="line not found")
+        line = await self._require_tenant_line(
+            conversation.line_id, tenant_id
+        )
         return conversation.id, self._embed_token(line.tenant_id)

@@ -1,54 +1,69 @@
 """CRM connection management (личный кабинет)."""
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.dependencies import get_crm_service
 from app.schemas.crm_schemas import AmoAccountOut, AmoLineConnectRequest
 from app.services.crm_service import CrmService
+from core.dependencies import get_verified_user
+from schemas.auth_schemas import UserContext
 
 connections_router = APIRouter(prefix="/connections", tags=["connections"])
+
+
+def _tenant_id(user: UserContext) -> uuid.UUID:
+    if user.tenant_id is None:
+        raise HTTPException(status_code=403, detail="no tenant")
+    return user.tenant_id
 
 
 @connections_router.post("/amo/{tenant_id}/connect-channel")
 async def amo_connect_channel(
     tenant_id: uuid.UUID,
+    user: UserContext = Depends(get_verified_user),
     crm_service: CrmService = Depends(get_crm_service),
 ):
+    if tenant_id != _tenant_id(user):
+        raise HTTPException(status_code=403, detail="forbidden")
     return await crm_service.amo_connect_channel(tenant_id)
 
 
 @connections_router.get("/amo", response_model=list[AmoAccountOut])
 async def list_amo_accounts(
+    user: UserContext = Depends(get_verified_user),
     crm_service: CrmService = Depends(get_crm_service),
 ):
-    return await crm_service.list_amo_accounts()
+    return await crm_service.list_amo_accounts(_tenant_id(user))
 
 
 @connections_router.post("/amo/line")
 async def connect_amo_line(
     body: AmoLineConnectRequest,
+    user: UserContext = Depends(get_verified_user),
     crm_service: CrmService = Depends(get_crm_service),
 ):
-    return await crm_service.connect_amo_line(body)
+    return await crm_service.connect_amo_line(body, _tenant_id(user))
 
 
 @connections_router.delete("/amo/line/{line_id}")
 async def disconnect_amo_line(
     line_id: uuid.UUID,
+    user: UserContext = Depends(get_verified_user),
     crm_service: CrmService = Depends(get_crm_service),
 ):
-    await crm_service.disconnect_amo_line(line_id)
+    await crm_service.disconnect_amo_line(line_id, _tenant_id(user))
     return {"status": "ok"}
 
 
 @connections_router.get("/amo/lead/{lead_id}")
 async def amo_lead_conversation(
     lead_id: str,
+    user: UserContext = Depends(get_verified_user),
     crm_service: CrmService = Depends(get_crm_service),
 ):
     conversation_id, embed_token = await crm_service.get_conv_by_lead(
-        lead_id
+        lead_id, _tenant_id(user)
     )
     return {
         "conversation_id": str(conversation_id),

@@ -75,25 +75,31 @@ class CrmAccountRepository(BaseRepository[CrmAccount]):
 
     async def upsert_amo(
         self,
-        tenant_id: uuid.UUID,
         domain: str,
         account_id: str,
         amojo_id: str,
         access_token_enc: str,
         refresh_token_enc: str,
+        tenant_id: uuid.UUID | None = None,
     ) -> CrmAccount:
+        """Создаёт или обновляет аккаунт amoCRM по домену.
+
+        tenant_id необязателен: при установке через OAuth тенант ещё
+        неизвестен, и уже сохранённая привязка не затирается.
+        """
         rows = await self.get_multi(
             filters={"domain": domain, "crm_type": "amocrm"},
             limit=1,
         )
         if rows:
             update_data = {
-                "tenant_id": tenant_id,
                 "account_id": account_id,
                 "access_token_enc": access_token_enc,
                 "refresh_token_enc": refresh_token_enc,
                 "is_active": True,
             }
+            if tenant_id:
+                update_data["tenant_id"] = tenant_id
             if amojo_id:
                 update_data["amojo_id"] = amojo_id
             return await self.update(rows[0], **update_data)

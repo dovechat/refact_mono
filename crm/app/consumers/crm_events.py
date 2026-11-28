@@ -19,8 +19,8 @@ from core.crm_contract import (
     normalize_crm_send_result,
 )
 from core.database import get_session
-from crm.app.core.uow import CrmUnitOfWork
-from crm.app.services.crm_service import CrmService
+from app.core.uow import CrmUnitOfWork
+from app.services.crm_service import CrmService
 
 log = logging.getLogger(__name__)
 

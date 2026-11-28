@@ -2,7 +2,7 @@
 import logging
 from infra.crypto import encrypt, decrypt
 from app.services.providers.base import CrmProvider
-from app.services.providers.amocrm.client import AmoCrmClient
+from app.services.providers.bitrix.client import BitrixClient
 from core.config import settings
 
 log = logging.getLogger("uvicorn.error")

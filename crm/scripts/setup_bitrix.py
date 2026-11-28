@@ -5,8 +5,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from core.config import settings
 from core.database import get_session
-from crm.app.repositories.crm_repo import CrmAccountRepository
-from crm.app.services.providers.bitrix.client import BitrixClient
+from app.repositories.crm_repo import CrmAccountRepository
+from app.services.providers.bitrix.client import BitrixClient
 from infra.crypto import decrypt
 
 
