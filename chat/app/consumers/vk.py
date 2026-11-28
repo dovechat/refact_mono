@@ -6,7 +6,6 @@ import random
 import secrets
 from typing import Dict, TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.crm_contract import normalize_crm_send_result
 from core.database import get_session
 from core.redis import rdb
 from infra.crypto import decrypt
@@ -17,7 +16,7 @@ from repo.line_repo import ChannelAccountRepository, LineRepository
 from app.services.websocket_manager import manager
 from schemas.line_schemas import ChannelType
 from services.storage_service import StorageService
-from app.core.crm_flag import crm_enabled
+from app.services.crm_client import get_crm_client
 
 if TYPE_CHECKING:  # pragma: no cover
     from app.services.chat_service import ChatService
@@ -176,15 +175,11 @@ class VkListener:
         if message and not crm_message_id:
             crm_message_id = message.id
 
-        if crm_message_id and crm_enabled():
+        crm_client = get_crm_client()
+        if crm_message_id and crm_client:
             try:
-                from crm.app.services.crm_service import CrmService
-                from crm.app.core.uow import CrmUnitOfWork
-                crm_uow = CrmUnitOfWork(db)
-                crm_service = CrmService(crm_uow)
-                line = await crm_uow.lines.get_by_id(line_id)
-                await crm_service.edit_to_crm(
-                    tenant_id=line.tenant_id,
+                await crm_client.edit_to_crm(
+                    line_id=line_id,
                     conversation_id=conv.id,
                     message_id=str(crm_message_id),
                     text=text,
@@ -444,15 +439,11 @@ class VkListener:
 
         await manager.send_new_message(conv_id, ws_message)
 
-        if crm_enabled():
+        crm_client = get_crm_client()
+        if crm_client:
             try:
-                from crm.app.services.crm_service import CrmService
-                from crm.app.core.uow import CrmUnitOfWork
-                crm_uow = CrmUnitOfWork(db)
-                crm_service = CrmService(crm_uow)
-                line = await crm_uow.lines.get_by_id(line_id)
-                bx_chat = await crm_service.send_to_crm(
-                    tenant_id=line.tenant_id,
+                await crm_client.send_to_crm(
+                    line_id=line_id,
                     conversation_id=conv_id,
                     client_phone=phone,
                     client_name="",
@@ -461,11 +452,6 @@ class VkListener:
                     channel_type="vk",
                     media=media_items,
                 )
-                log.info(f"send_to_crm bx_chat={bx_chat}")
-                bx_chat_id, _crm_message_id = normalize_crm_send_result(bx_chat)
-                if bx_chat_id:
-                    log.info(f"send_to_crm bx_chat_id={bx_chat_id}")
-                    await chat_service.conv_repo.update(conv, crm_chat_id=bx_chat_id)
             except Exception as e:
                 log.error(f"CRM send_to_crm failed: {e}")
                 return 'ok'

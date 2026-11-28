@@ -2,12 +2,11 @@ import logging
 import secrets
 import httpx
 import uuid
-from contextlib import asynccontextmanager
 from typing import Dict, TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 from core.config import settings
-from core.crm_contract import normalize_crm_send_result
+from app.core.crm_flag import crm_enabled
 from core.database import get_session
 from app.repositories.message_repo import MessageRepository
 from repo.line_repo import ChannelAccountRepository
@@ -193,15 +192,11 @@ class GreenWhatsAppListener:
                     "text": new_text,
                 })
                 
-                if crm_enabled():
+                crm_client = get_crm_client()
+                if crm_client:
                     try:
-                        from crm.app.services.crm_service import CrmService
-                        from crm.app.core.uow import CrmUnitOfWork
-                        crm_uow = CrmUnitOfWork(db)
-                        crm_service = CrmService(crm_uow)
-                        line = await crm_uow.lines.get_by_id(line_id)
-                        await crm_service.edit_to_crm(
-                            tenant_id=line.tenant_id,
+                        await crm_client.edit_to_crm(
+                            line_id=line_id,
                             conversation_id=message.conversation_id,
                             message_id=str(message.id),
                             text=new_text,
@@ -248,16 +243,11 @@ class GreenWhatsAppListener:
                         "message_id": str(message_id_local),
                     })
 
-
-                    if crm_message_id and crm_enabled():
+                    crm_client = get_crm_client()
+                    if crm_message_id and crm_client:
                         try:
-                            from crm.app.services.crm_service import CrmService
-                            from crm.app.core.uow import CrmUnitOfWork
-                            crm_uow = CrmUnitOfWork(db)
-                            crm_service = CrmService(crm_uow)
-                            line = await crm_uow.lines.get_by_id(line_id)
-                            await crm_service.delete_from_crm(
-                                tenant_id=line.tenant_id,
+                            await crm_client.delete_from_crm(
+                                line_id=line_id,
                                 conversation_id=conversation_id,
                                 client_phone="",
                                 message_id=str(crm_message_id),
@@ -335,20 +325,16 @@ class GreenWhatsAppListener:
 
         await manager.send_new_message(conv.id, ws_message)
 
-        if not crm_enabled():
+        crm_client = get_crm_client()
+        if not crm_client:
             return
 
         try:
-            from crm.app.services.crm_service import CrmService
-            from crm.app.core.uow import CrmUnitOfWork
-            crm_uow = CrmUnitOfWork(db)
-            crm_service = CrmService(crm_uow)
-            line = await crm_uow.lines.get_by_id(line_id)
             sender_name = sender_data.get("senderName", "")
-            log.info(f"green wh send_to_crm tenant_id {line.tenant_id} conversation_id {conv.id}")
+            log.info(f"green wh send_to_crm line_id {line_id} conversation_id {conv.id}")
 
-            bx_chat = await crm_service.send_to_crm(
-                tenant_id=line.tenant_id,
+            await crm_client.send_to_crm(
+                line_id=line_id,
                 conversation_id=conv.id,
                 client_phone=phone,
                 client_name=sender_name,
@@ -358,10 +344,6 @@ class GreenWhatsAppListener:
                 media=[{"id": str(media_id), "file_name": original_file_name, "mime_type": mime_type,
                         "file_size": 0}] if media_id else [],
             )
-            bx_chat_id, _crm_message_id = normalize_crm_send_result(bx_chat)
-            log.info(f"send_to_crm bx_chat {bx_chat} bx_chat_id={bx_chat_id}")
-            if bx_chat_id:
-                await chat_service.conv_repo.update(conv, crm_chat_id=bx_chat_id)
         except Exception as e:
             log.error(f"CRM send_to_crm failed: {e}")
 

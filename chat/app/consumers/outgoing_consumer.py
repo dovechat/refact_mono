@@ -5,9 +5,9 @@ import logging
 import uuid
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from core.config import settings
-from core.database import get_session
-from app.core.crm_flag import crm_enabled
 from app.core.log_filter import install_log_masking
+from app.services.chat_service import ChatService
+from app.services.crm_client import CrmClient, get_crm_client
 from app.services.chat_service import ChatService
 from app.schemas.chat_schemas import MessageCreate, MessageDirection, MessageStatus
 from schemas.auth_schemas import UserContext
@@ -22,7 +22,7 @@ async def process_message(
     event_data: dict,
     channel_type: str,
     chat_service: ChatService,
-    crm_service=None,
+    crm_client: CrmClient | None = None,
 ):
     if event_data.get("action") == "edit":
         current_user = UserContext(
@@ -50,7 +50,7 @@ async def process_message(
             phone=event_data["phone"],
             line_id=uuid.UUID(event_data["line_id"]),
             channel_type=channel_type,
-            crm_service=crm_service,
+            crm_client=crm_client,
         )
         return
 
@@ -99,13 +99,7 @@ async def process_with_retries(
         try:
             async with get_session() as db:
                 chat_service = ChatService(db)
-                crm_service = None
-                if crm_enabled():
-                    from crm.app.services.crm_service import CrmService
-                    from crm.app.core.uow import CrmUnitOfWork
-                    crm_uow = CrmUnitOfWork(db)
-                    crm_service = CrmService(crm_uow)
-                await process_message(event_data, channel_type, chat_service, crm_service)
+                await process_message(event_data, channel_type, chat_service, get_crm_client())
             return True, None
         except Exception as e:
             last_error = e

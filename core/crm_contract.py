@@ -9,6 +9,12 @@
 
 from typing import Any, Tuple
 
+# Очередь chat -> crm: чат публикует события, crm читает и отправляет в CRM.
+CRM_EVENTS_TOPIC = "crm_events"
+CRM_ACTION_SEND = "send"
+CRM_ACTION_EDIT = "edit"
+CRM_ACTION_DELETE = "delete"
+
 
 def normalize_crm_send_result(result: Any) -> Tuple[str | None, str | None]:
     """Привести результат `send_to_crm` к паре (crm_chat_id, crm_message_id)."""

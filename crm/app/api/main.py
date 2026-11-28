@@ -45,5 +45,3 @@ app.include_router(install_router, prefix="/api/v1")
 app.include_router(outgoing_router, prefix="/api/v1")
 app.include_router(robots_router, prefix="/api/v1")
 app.include_router(static_router, prefix="")
-app.include_router(internal_router, prefix="/api/v1")
-

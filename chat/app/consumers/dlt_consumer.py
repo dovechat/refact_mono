@@ -1,4 +1,3 @@
-# /mono/chat/app/consumers/dlt_consumer.py
 import json
 import asyncio
 import logging
@@ -9,8 +8,8 @@ from core.database import get_session
 from app.services.chat_service import ChatService
 from app.schemas.chat_schemas import MessageCreate, MessageDirection, MessageStatus
 from schemas.auth_schemas import UserContext
-from app.core.crm_flag import crm_enabled
 from app.core.log_filter import install_log_masking
+from app.services.crm_client import get_crm_client
 
 
 log = logging.getLogger(__name__)
@@ -48,15 +47,7 @@ async def process_dlt_message(
 async def process_dlt_incoming(event_data: dict, chat_service: ChatService):
     """Повтор входящего сообщения (формат incoming_consumer.process_message)."""
     from app.consumers.incoming_consumer import process_message as process_incoming
-
-    crm_uow = None
-    crm_service = None
-    if crm_enabled():
-        from crm.app.services.crm_service import CrmService
-        from crm.app.core.uow import CrmUnitOfWork
-        crm_uow = CrmUnitOfWork(chat_service.db)
-        crm_service = CrmService(crm_uow)
-    await process_incoming(event_data, chat_service, crm_uow, crm_service)
+    await process_incoming(event_data, chat_service, get_crm_client())
 
 
 async def start_dlt_consumer():

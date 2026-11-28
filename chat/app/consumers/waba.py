@@ -6,7 +6,7 @@ import uuid
 from typing import Dict, TYPE_CHECKING
 from fastapi import HTTPException
 from core.config import settings
-from core.crm_contract import normalize_crm_send_result
+from app.core.crm_flag import crm_enabled
 from core.database import get_session
 from core.metrics import webhook_processing_seconds, webhook_errors_total
 from core.redis import rdb
@@ -272,15 +272,11 @@ class WabaListener:
     
                 await manager.send_new_message(conv.id, ws_message)
     
-                if crm_enabled():
+                crm_client = get_crm_client()
+                if crm_client:
                     try:
-                        from crm.app.services.crm_service import CrmService
-                        from crm.app.core.uow import CrmUnitOfWork
-                        crm_uow = CrmUnitOfWork(db)
-                        crm_service = CrmService(crm_uow)
-                        line = await crm_uow.lines.get_by_id(line_id)
-                        bx_chat = await crm_service.send_to_crm(
-                            tenant_id=line.tenant_id,
+                        await crm_client.send_to_crm(
+                            line_id=line_id,
                             conversation_id=conv.id,
                             client_phone=phone,
                             client_name="",
@@ -290,15 +286,7 @@ class WabaListener:
                             media=[{"id": m["id"], "file_name": m["file_name"], "mime_type": m["mime_type"], "file_size": 0} for m
                                    in media_items],
                         )
-                        bx_chat_id, _crm_message_id = normalize_crm_send_result(bx_chat)
-                        log.info(f"send_to_crm bx_chat_id={bx_chat_id}")
-                        if bx_chat_id:
-                            await ChatRepository(db).update(conv, crm_chat_id=bx_chat_id)
                     except Exception as e:
-                        log.error(f"CRM send_to_crm failed: {e}", exc_info=True)
-
-
-
 
 
     async def _handle_message_status(self, line_id: str, value: dict):

@@ -7,9 +7,8 @@ from uuid import UUID
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
 from core.config import settings
-from core.crm_contract import normalize_crm_send_result
 from core.database import get_session
-from app.core.crm_flag import crm_enabled
+from app.services.crm_client import CrmClient, get_crm_client
 from app.core.log_filter import install_log_masking
 from app.schemas.telegram_schemas import IncomingEvent, IncomingMessage
 from app.services.chat_service import ChatService
@@ -24,8 +23,7 @@ MAX_RETRIES = 5
 async def process_message(
     event_data: dict,
     chat_service: ChatService,
-    crm_uow=None,
-    crm_service=None,
+    crm_client: CrmClient | None = None,
 ):
 
     line_id_ = event_data.get("line_id", "")
@@ -58,11 +56,10 @@ async def process_message(
                     "channel_msg_id": [str(event_data["message"]["id"])],
                 }
             )
-            if crm_service and messages:
-                line = await crm_service._uow.lines.get_by_id(line_id_1)
+            if crm_client and messages:
                 message = messages[0]
-                await crm_service.edit_to_crm(
-                    tenant_id=line.tenant_id,
+                await crm_client.edit_to_crm(
+                    line_id=line_id_1,
                     conversation_id=conversation_id,
                     message_id=str(message.id),
                     text=event_data["message"].get("text") or "",
@@ -86,12 +83,9 @@ async def process_message(
                 }
             )
 
-            line = None
-            if crm_service:
-                line = await crm_service._uow.lines.get_by_id(line_id_1)
-            for message in (messages if crm_service else []):
-                await crm_service.delete_from_crm(
-                    tenant_id=line.tenant_id,
+            for message in (messages if crm_client else []):
+                await crm_client.delete_from_crm(
+                    line_id=line_id_1,
                     conversation_id=conversation_id,
                     client_phone="",
                     message_id=str(message.id),
@@ -119,38 +113,18 @@ async def process_message(
         media_items=media,
     )
 
-    if event_type == "message_created" and crm_service:
-        try:
-            line = await crm_uow.lines.get_by_id(line_id_1)
-            sender = event_data["message"].get("sender") or {}
-
-            bx_chat = await crm_service.send_to_crm(
-                tenant_id=line.tenant_id,
-                conversation_id=conversation_id,
-                client_phone=event_data["peer_phone"],
-                client_name=sender.get("username") or "",
-                text=event_data["message"].get("text") or "",
-                message_id=str(message_data.id),  # str(event_data["message"]["id"]),
-                channel_type="telegram_user",
-                media=media,
-            )
-            bx_chat_id, crm_message_id = normalize_crm_send_result(bx_chat)
-            log.info(f"send_to_crm bx_chat_id={bx_chat_id} crm_message_id={crm_message_id}")
-            if bx_chat_id:
-                await chat_service.conv_repo.update(
-                    await chat_service.conv_repo.get_by_id(conversation_id),
-                    crm_chat_id=bx_chat_id,
-                )
-            if crm_message_id:
-                msg_orm = await chat_service.msg_repo.get_by_id(message_data.id)
-                await chat_service.msg_repo.update(
-                    msg_orm,
-                    raw_content={"crm_message_id": crm_message_id, "bx_real_id": crm_message_id},
-                )
-
-        except Exception as e:
-            log.error(f"CRM send_to_crm failed: {e}")
-
+    if event_type == "message_created" and crm_client:
+        sender = event_data["message"].get("sender") or {}
+        await crm_client.send_to_crm(
+            line_id=line_id_1,
+            conversation_id=conversation_id,
+            client_phone=event_data["peer_phone"],
+            client_name=sender.get("username") or "",
+            text=event_data["message"].get("text") or "",
+            message_id=str(message_data.id),
+            channel_type="telegram_user",
+            media=media,
+        )
 
 
     await manager.send_new_message(
@@ -168,18 +142,10 @@ async def process_with_retries(
         try:
             async with get_session() as db:
                 chat_service = ChatService(db)
-                crm_uow = None
-                crm_service = None
-                if crm_enabled():
-                    from crm.app.services.crm_service import CrmService
-                    from crm.app.core.uow import CrmUnitOfWork
-                    crm_uow = CrmUnitOfWork(db)
-                    crm_service = CrmService(crm_uow)
                 await process_message(
                     event_data,
                     chat_service,
-                    crm_uow,
-                    crm_service,
+                    get_crm_client(),
                 )
             return True, None
         except Exception as e:

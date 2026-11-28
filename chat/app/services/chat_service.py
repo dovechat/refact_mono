@@ -260,7 +260,7 @@ class ChatService:
         return MessageResponse.model_validate(message)
 
     async def delete_message(self, message_id: int, current_user: UserContext, phone: str, line_id: uuid.UUID,
-                             channel_type: str, crm_service=None) -> None:
+                             channel_type: str, crm_client=None) -> None:
         message = await self.msg_repo.get_by_id(message_id)
         if not message:
             raise HTTPException(status_code=404, detail="message not found")
@@ -291,11 +291,10 @@ class ChatService:
                 )
 
         crm_message_id = (message.raw_content or {}).get("crm_message_id")
-        if crm_service and crm_message_id:
-            line = await self.line_repo.get_by_id(line_id)
+        if crm_client and crm_message_id:
             try:
-                await crm_service.delete_from_crm(
-                    tenant_id=line.tenant_id,
+                await crm_client.delete_from_crm(
+                    line_id=line_id,
                     conversation_id=message.conversation_id,
                     client_phone=phone,
                     message_id=crm_message_id,

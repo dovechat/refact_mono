@@ -109,11 +109,10 @@ async def test_handle_webhook_ignores_non_message(mock_decrypt):
 
 
 @pytest.mark.asyncio
-@patch("crm.app.core.uow.CrmUnitOfWork")
-@patch("crm.app.services.crm_service.CrmService")
+@patch("app.services.bot_service.get_crm_client")
 @patch("app.services.websocket_manager.manager")
 @patch("app.services.bot_service.decrypt_credentials")
-async def test_handle_webhook_success_existing_conversation(mock_decrypt, mock_manager, mock_crm_cls, mock_uow_cls):
+async def test_handle_webhook_success_existing_conversation(mock_decrypt, mock_manager, mock_get_crm):
     service = make_service()
     line = make_line()
     service.db.get = AsyncMock(return_value=line)
@@ -124,7 +123,7 @@ async def test_handle_webhook_success_existing_conversation(mock_decrypt, mock_m
     db_message = make_db_message()
     service.msg_repo.create_message = AsyncMock(return_value=db_message)
     mock_manager.send_new_message = AsyncMock()
-    mock_crm_cls.return_value.send_to_crm = AsyncMock(return_value=None)
+    mock_get_crm.return_value.send_to_crm = AsyncMock(return_value=None)
 
     request = MagicMock(headers={"x-telegram-bot-api-secret-token": "s"})
     update_data = {"message": {"chat": {"id": 123, "username": "bob"}, "message_id": 5, "text": "hi"}}
@@ -138,11 +137,10 @@ async def test_handle_webhook_success_existing_conversation(mock_decrypt, mock_m
 
 
 @pytest.mark.asyncio
-@patch("crm.app.core.uow.CrmUnitOfWork")
-@patch("crm.app.services.crm_service.CrmService")
+@patch("app.services.bot_service.get_crm_client")
 @patch("app.services.websocket_manager.manager")
 @patch("app.services.bot_service.decrypt_credentials")
-async def test_handle_webhook_new_conversation_notifies_members(mock_decrypt, mock_manager, mock_crm_cls, mock_uow_cls):
+async def test_handle_webhook_new_conversation_notifies_members(mock_decrypt, mock_manager, mock_get_crm):
     service = make_service()
     line = make_line()
     service.db.get = AsyncMock(return_value=line)
@@ -156,7 +154,7 @@ async def test_handle_webhook_new_conversation_notifies_members(mock_decrypt, mo
     service.membership_repo.get_by_tenant = AsyncMock(return_value=[member])
     mock_manager.send_new_conversation = AsyncMock()
     mock_manager.send_new_message = AsyncMock()
-    mock_crm_cls.return_value.send_to_crm = AsyncMock(return_value=None)
+    mock_get_crm.return_value.send_to_crm = AsyncMock(return_value=None)
 
     request = MagicMock(headers={"x-telegram-bot-api-secret-token": "s"})
     update_data = {"message": {"chat": {"id": 123}, "message_id": 5, "text": "hi"}}
@@ -167,11 +165,10 @@ async def test_handle_webhook_new_conversation_notifies_members(mock_decrypt, mo
 
 
 @pytest.mark.asyncio
-@patch("crm.app.core.uow.CrmUnitOfWork")
-@patch("crm.app.services.crm_service.CrmService")
+@patch("app.services.bot_service.get_crm_client")
 @patch("app.services.websocket_manager.manager")
 @patch("app.services.bot_service.decrypt_credentials")
-async def test_handle_webhook_with_media(mock_decrypt, mock_manager, mock_crm_cls, mock_uow_cls):
+async def test_handle_webhook_with_media(mock_decrypt, mock_manager, mock_get_crm):
     service = make_service()
     line = make_line()
     service.db.get = AsyncMock(return_value=line)
@@ -182,7 +179,7 @@ async def test_handle_webhook_with_media(mock_decrypt, mock_manager, mock_crm_cl
     db_message = make_db_message()
     service.msg_repo.create_message = AsyncMock(return_value=db_message)
     mock_manager.send_new_message = AsyncMock()
-    mock_crm_cls.return_value.send_to_crm = AsyncMock(return_value=None)
+    mock_get_crm.return_value.send_to_crm = AsyncMock(return_value=None)
 
     media_id = str(uuid.uuid4())
     with patch.object(
@@ -199,11 +196,10 @@ async def test_handle_webhook_with_media(mock_decrypt, mock_manager, mock_crm_cl
 
 
 @pytest.mark.asyncio
-@patch("crm.app.core.uow.CrmUnitOfWork")
-@patch("crm.app.services.crm_service.CrmService")
+@patch("app.services.bot_service.get_crm_client")
 @patch("app.services.websocket_manager.manager")
 @patch("app.services.bot_service.decrypt_credentials")
-async def test_handle_webhook_crm_failure_swallowed(mock_decrypt, mock_manager, mock_crm_cls, mock_uow_cls):
+async def test_handle_webhook_crm_failure_swallowed(mock_decrypt, mock_manager, mock_get_crm):
     service = make_service()
     line = make_line()
     service.db.get = AsyncMock(return_value=line)
@@ -214,7 +210,7 @@ async def test_handle_webhook_crm_failure_swallowed(mock_decrypt, mock_manager, 
     db_message = make_db_message()
     service.msg_repo.create_message = AsyncMock(return_value=db_message)
     mock_manager.send_new_message = AsyncMock()
-    mock_crm_cls.return_value.send_to_crm = AsyncMock(side_effect=Exception("boom"))
+    mock_get_crm.return_value.send_to_crm = AsyncMock(side_effect=Exception("boom"))
 
     request = MagicMock(headers={"x-telegram-bot-api-secret-token": "s"})
     update_data = {"message": {"chat": {"id": 123}, "message_id": 5, "text": "hi"}}

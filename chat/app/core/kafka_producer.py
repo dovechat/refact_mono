@@ -5,6 +5,7 @@ from aiokafka import AIOKafkaProducer
 from fastapi import HTTPException, UploadFile
 from loguru import logger
 from core.config import settings
+from core.crm_contract import CRM_EVENTS_TOPIC
 from services.storage_service import StorageService
 
 CHANNEL_TOPICS = {
@@ -146,6 +147,11 @@ class KafkaEventProducer:
         await self._send(topic, payload, conversation_id)
 
 
+    async def send_crm_event(self, action: str, conversation_id: uuid.UUID, **fields) -> None:
+        """Событие для crm. Ключ = conversation_id, чтобы порядок событий разговора сохранялся."""
+        payload = {"action": action, "conversation_id": str(conversation_id), **fields}
+        await self._send(CRM_EVENTS_TOPIC, payload, conversation_id)
+
     async def _send(self, topic: str, payload: dict, conversation_id: uuid.UUID):
         if not self.producer:
             async with self._lock:
@@ -155,7 +161,9 @@ class KafkaEventProducer:
         try:
             # send_and_wait: ждём подтверждения брокера, иначе API ответил бы 200,
             # а сообщение могло бы потеряться.
-            await self.producer.send_and_wait(topic=topic, value=payload)
+            await self.producer.send_and_wait(
+                topic=topic, value=payload, key=str(conversation_id).encode()
+            )
             logger.info(f"KafkaEventProducer.send_message sent topic={topic} conversation_id={conversation_id}")
         except Exception as e:
             logger.error(

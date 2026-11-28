@@ -7,8 +7,7 @@ from app.repositories.chat_repo import ChatRepository
 from app.repositories.message_repo import MessageRepository
 from app.services import websocket_manager
 from core.config import settings
-from core.crm_contract import normalize_crm_send_result
-from app.core.crm_flag import crm_enabled
+from app.services.crm_client import get_crm_client
 from core.metrics import webhook_processing_seconds, webhook_errors_total
 from infra.utils import decrypt_credentials
 from repo.line_repo import ChannelAccountRepository, LineRepository
@@ -63,14 +62,11 @@ class BotService:
             "text": text,
         })
 
-        if crm_enabled():
+        crm_client = get_crm_client()
+        if crm_client:
             try:
-                from crm.app.services.crm_service import CrmService
-                from crm.app.core.uow import CrmUnitOfWork
-                crm_uow = CrmUnitOfWork(self.db)
-                crm_service = CrmService(crm_uow)
-                await crm_service.edit_to_crm(
-                    tenant_id=line.tenant_id,
+                await crm_client.edit_to_crm(
+                    line_id=line.id,
                     conversation_id=conversation.id,
                     message_id=str(db_message.id),
                     text=text,
@@ -195,14 +191,11 @@ class BotService:
                 await websocket_manager.manager.send_new_message(str(conversation.id), ws_message)
                 log.info("send_new_message done")
         
-                if crm_enabled():
+                crm_client = get_crm_client()
+                if crm_client:
                     try:
-                        from crm.app.services.crm_service import CrmService
-                        from crm.app.core.uow import CrmUnitOfWork
-                        crm_uow = CrmUnitOfWork(self.db)
-                        crm_service = CrmService(crm_uow)
-                        bx_chat = await crm_service.send_to_crm(
-                            tenant_id=line.tenant_id,
+                        await crm_client.send_to_crm(
+                            line_id=line_id,
                             conversation_id=conversation.id,
                             client_phone=str(message.get("from", {}).get("id") or chat_id),
                             client_name=chat.get("first_name") or "",
@@ -211,9 +204,6 @@ class BotService:
                             channel_type="telegram_bot",
                             media=[{"id": str(media_id), "file_name": file_name, "mime_type": mime_type, "file_size": file_size}] if media_id else []
                         )
-                        bx_chat_id, _crm_message_id = normalize_crm_send_result(bx_chat)
-                        if bx_chat_id:
-                            await self.conv_repo.update(conversation, crm_chat_id=bx_chat_id)
                     except Exception as e:
                         log.error(f"CRM send_to_crm failed: {e}")
 
