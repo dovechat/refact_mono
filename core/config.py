@@ -147,6 +147,10 @@ class Settings(BaseSettings):
     AMO_REDIRECT_URI: str = ""
     AMO_CHANNEL_ID: str = ""
     AMO_CHANNEL_SECRET: str = ""
+    AMO_OAUTH_URL: str = "https://www.kommo.com/oauth"
+    AMO_AUTHORIZE_URL: str = (
+        "https://new1782329019.amocrm.ru/oauth2/authorize"
+    )
 
     TOPIC_INCOMING_MESSAGES: str = "telegram.incoming.messages"
     TOPIC_MESSAGE_STATUS: str = "telegram.message.status"
@@ -194,3 +198,12 @@ if not settings.internal_api_token:
         "INTERNAL_API_TOKEN is not set - /internal/* endpoints will reject every request."
     )
 
+    # Адреса сервисов внутри кластера (crm -> chat, account, tg-connector)
+    chat_internal_url: str = "http://chat.dchat.svc.cluster.local:8001"
+    account_internal_url: str = (
+        "http://account.dchat.svc.cluster.local:8071"
+    )
+    tg_connector_url: str = "http://tg-connector.dchat.svc.cluster.local:8000"
+
+    # CORS сервиса crm (amoCRM-виджет); на проде задать через env
+    crm_cors_origins: list[str] = ["https://new1782329019.amocrm.ru"]

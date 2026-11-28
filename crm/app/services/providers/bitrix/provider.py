@@ -1,8 +1,8 @@
 """Bitrix24 CRM provider."""
 import logging
 from infra.crypto import encrypt, decrypt
-from crm.app.services.providers.base import CrmProvider
-from crm.app.services.providers.bitrix.client import BitrixClient
+from app.services.providers.base import CrmProvider
+from app.services.providers.amocrm.client import AmoCrmClient
 from core.config import settings
 
 log = logging.getLogger("uvicorn.error")

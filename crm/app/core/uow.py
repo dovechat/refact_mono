@@ -1,18 +1,20 @@
+"""Unit of work для сервиса CRM: репозитории на одной сессии."""
 from sqlalchemy.ext.asyncio import AsyncSession
-from repo.base import BaseRepository
+
+from app.repositories.crm_repo import (
+    CrmAccountRepository,
+    CrmDialogLinkRepository,
+)
 from models.lines import ChannelAccount, Line
-from models.crm import CrmAccount
-from crm.app.repositories.crm_repo import CrmAccountRepository, CrmDialogLinkRepository
-from repo.crm_repo import CrmLineConnectionRepository
-from repo.crm_repo import CrmSettingsRepository
-from models.crm import CrmSettings
-from models.messages import Conversation, Message
-from repo.message_repo import MessageRepository
+from models.messages import Conversation
 from models.tenants import Membership, User
+from repo.base import BaseRepository
+from repo.crm_repo import CrmLineConnectionRepository, CrmSettingsRepository
+from repo.message_repo import MessageRepository
 
 
 class CrmUnitOfWork:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
         self.crm_accounts = CrmAccountRepository(db)
         self.crm_dialog_links = CrmDialogLinkRepository(db)
         self.crm_settings = CrmSettingsRepository(db)

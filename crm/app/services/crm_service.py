@@ -11,14 +11,17 @@ import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import urlencode, urlparse
 
 import httpx
 import jwt
 from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
 
-from app.schemas.crm_schemas import AmoLineConnectRequest
+from app.schemas.crm_schemas import (
+    AmoLineConnectRequest,
+    AmoSaveTokensRequest,
+)
 from app.services.providers.amocrm.client import AmoCrmClient
 from app.services.providers.amocrm.provider import AmoCrmProvider
 from app.services.providers.base import CrmProvider
@@ -114,12 +117,6 @@ WA_TG_STATUS_FIELD = {
     "LIST_COLUMN_LABEL": "DoveChat: статус",
     "MANDATORY": "N",
 }
-
-
-def _parse_form(body: bytes) -> dict[str, str]:
-    """Разбирает form-urlencoded тело в плоский словарь."""
-    parsed = parse_qs(body.decode())
-    return {key: values[0] for key, values in parsed.items()}
 
 
 def _prop(
@@ -754,8 +751,7 @@ class CrmService:
         await self._register_robots(bx)
         return data.get("PLACEMENT") == "SETTING_CONNECTOR", domain
 
-    async def handle_onappinstall(self, body: bytes, domain: str = ""):
-        data = _parse_form(body)
+    async def handle_onappinstall(self, data: dict, domain: str = ""):
         saved = await self.save_install_tokens(data, domain=domain)
         if saved is None or not saved[0]:
             return RedirectResponse(url=INSTALL_FINISH_URL, status_code=303)
@@ -1290,6 +1286,9 @@ class CrmService:
             log.error("%s.check_wa_tg: no account member_id=%s",
                       _LOC, member_id)
             return {"status": "error"}
+        if not self._verify_bitrix_app_token(conn, data):
+            log.error("%s.check_wa_tg: bad application_token", _LOC)
+            return {"status": "error"}
         line_conns = await self._uow.crm_line_connections.get_by_account(
             conn.id
         )
@@ -1352,15 +1351,10 @@ class CrmService:
             resp.raise_for_status()
             tokens = resp.json()
 
-            resp = await client.get(
-                f"https://{domain}/api/v4/account",
-                headers={
-                    "Authorization": f"Bearer {tokens['access_token']}"
-                },
-            )
-            resp.raise_for_status()
-            account = resp.json()
 
+        account = await self._fetch_amo_account(
+            domain, tokens["access_token"]
+        )
         # tenant_id неизвестен: привязка к тенанту делается позже.
         await self._uow.crm_accounts.upsert_amo(
             tenant_id=None,
@@ -1372,6 +1366,36 @@ class CrmService:
         )
         log.info("%s.handle_amo_install saved domain=%s", _LOC, domain)
         return RedirectResponse(url=INSTALL_FINISH_URL, status_code=303)
+
+    @staticmethod
+    async def _fetch_amo_account(domain: str, access_token: str) -> dict:
+        """Аккаунт amoCRM вместе с amojo_id (нужен для чатов)."""
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                f"https://{domain}/api/v4/account?with=amojo_id",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    async def save_amo_tokens(self, body: AmoSaveTokensRequest) -> dict:
+        account = await self._fetch_amo_account(
+            body.domain, body.access_token
+        )
+        amojo_id = account.get("amojo_id", "")
+        await self._uow.crm_accounts.upsert_amo(
+            tenant_id=body.tenant_id,
+            domain=body.domain,
+            account_id=str(account["id"]),
+            amojo_id=amojo_id,
+            access_token_enc=encrypt(body.access_token),
+            refresh_token_enc=encrypt(body.refresh_token),
+        )
+        return {
+            "ok": True,
+            "account_id": str(account["id"]),
+            "amojo_id": amojo_id,
+        }
 
     def _amo_client(self, conn: CrmAccount) -> AmoCrmClient:
         return AmoCrmClient(
@@ -1538,7 +1562,11 @@ class CrmService:
         return None
 
     async def get_conv_by_lead(self, lead_id: str) -> tuple[uuid.UUID, str]:
-        """Возвращает (id диалога, embed-токен) для сделки amoCRM."""
+        """Возвращает (id диалога, embed-токен) для сделки amoCRM.
+
+        TODO: ручка без авторизации выдаёт токен владельца тенанта;
+        нужно проверять токен вызывающего и тенант диалога.
+        """
         conversation = (
             await self._conversation_by_lead_link(lead_id)
             or await self._link_lead_to_conversation(lead_id)

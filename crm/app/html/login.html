@@ -43,7 +43,7 @@
 var bxAuth = {};
 var jwtToken = '';
 console.log('script loaded, hostname:', location.hostname, 'href:', location.href);
-var params = new URLSearchParams(location.search);
+var params = new URLSearchParams(location.hash.slice(1) || location.search);
 var hostUrl = '{{ host_url }}';
 var bxAuth = {
     access_token: params.get('ACCESS_TOKEN') || '',

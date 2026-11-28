@@ -1,16 +1,9 @@
-"""Bitrix24 bizproc robot webhook handlers."""
-import logging
-import time
-import uuid
-from urllib.parse import parse_qs
-
-import httpx
-from fastapi import APIRouter, Depends, Request
+"""Обработчики роботов бизнес-процессов Bitrix24."""
+from fastapi import APIRouter, Depends
 
 from app.core.dependencies import get_crm_service
+from app.core.forms import get_form_data
 from app.services.crm_service import CrmService
-
-log = logging.getLogger("uvicorn.error")
 
 robots_router = APIRouter(prefix="/robots", tags=["robots"])
 
@@ -18,19 +11,7 @@ robots_router = APIRouter(prefix="/robots", tags=["robots"])
 @robots_router.post("/{robot_code}")
 async def robot_webhook(
     robot_code: str,
-    request: Request,
+    data: dict[str, str] = Depends(get_form_data),
     crm_service: CrmService = Depends(get_crm_service),
 ):
-    log.info(f"\n\n ROBOT HIT code={robot_code} \n\n")
-    body = await request.body()
-    parsed = parse_qs(body.decode())
-    data = {k: v[0] for k, v in parsed.items()}
-    log.info(f"robot_webhook raw data: {data}")
     return await crm_service.handle_robot(robot_code, data)
-
-'''
-@robots_router.post("/test_robot_123")
-async def test_robot(request: Request):
-    log.info("TEST ROBOT HIT")
-    return {"STATUS": "OK"}
-'''
